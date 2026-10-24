@@ -1,0 +1,21 @@
+[package]
+name = "linkshop"
+version = "0.2.4"
+edition = "2024"
+rust-version = "1.89"
+description = "A local-first Postman-style API client"
+
+[dependencies]
+eframe = { version = "0.33", default-features = false, features = ["default_fonts", "glow", "persistence", "x11", "wayland"] }
+reqwest = { version = "0.12", features = ["blocking", "native-tls", "gzip", "brotli", "deflate"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+ron = "0.11"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[profile.dev]
+incremental = false
+
+[profile.release]
+lto = "thin"
+strip = true

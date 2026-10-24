@@ -1,0 +1,12 @@
+# Rust build output and packaged releases
+/target/
+/dist/
+
+# Local environment configuration
+.env
+.env.*
+!.env.example
+
+# Operating system files
+.DS_Store
+Thumbs.db
