@@ -3,16 +3,11 @@
 
 #[path = "../src/branding.rs"]
 mod branding;
-#[path = "../src/model.rs"]
-mod model;
-#[path = "../src/postman.rs"]
-mod postman;
-#[path = "../src/ui.rs"]
+#[path = "../src/ui/mod.rs"]
 mod ui;
-#[path = "../src/widgets.rs"]
-mod widgets;
 
 use eframe::{App, egui};
+use linkshop::model;
 use std::path::PathBuf;
 
 struct Preview {

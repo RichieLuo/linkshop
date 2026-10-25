@@ -8,7 +8,7 @@ LinkShop is a local-first Rust desktop API client inspired by Postman. It opens 
 powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 run
 ```
 
-The helper loads the installed Visual Studio Build Tools environment and uses the rsproxy crate mirror. Pass `-CratesIo` to use the standard crates.io source instead. You can also use `cargo run --locked` from an already initialized MSVC developer shell.
+The helper loads an installed MSVC toolchain and Windows SDK. It uses Cargo's configured registry; the legacy `-CratesIo` option remains accepted. You can also use `cargo run --locked` from an already initialized MSVC developer shell.
 
 ## Current scope
 
@@ -40,24 +40,30 @@ Requests added from a collection or folder inherit by default. In a request's â€
 For headless local migration, close LinkShop first and run:
 
 ```powershell
-.\LinkShop.exe import "C:\exports\collections.json" "C:\exports\environment.json"
+.\linkshop.exe import "C:\exports\collections.json" "C:\exports\environment.json"
 ```
 
 The importer backs up `%APPDATA%\LinkShop\data\app.ron` before merging and writes `last-import-report.json` beside it. Do not run headless import while another LinkShop instance is saving the same profile.
 
-## Package for Windows x64
+## Package
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\package.ps1
 ```
 
-Creates an optimized executable with a static MSVC runtime and a versioned ZIP under `dist`, including Chinese usage instructions, third-party notices, and a SHA-256 checksum. Pass `-OutputDirectory` to choose a different destination. Existing packages are preserved.
+Requires Python 3.9+. Creates `dist/LinkShop-<version>-windows-x64/linkshop.exe`, a same-name ZIP and SHA-256 file, usage instructions, `package.json`, and third-party notices/licenses. Windows builds use a static MSVC runtime. Existing packages are preserved; pass `-OutputDirectory` for another destination. macOS/Linux use `python3 scripts/package.py` and produce tar.gz archives.
+
+The same script powers release CI. Only a pushed `v<version>` tag matching Cargo.toml publishes a GitHub Release. Artifacts are unsigned portable binaries; macOS is not notarized and Linux requires system libraries. See the shared [architecture and packaging conventions](docs/architecture.md).
+
+## Project structure
+
+`src/main.rs` calls `app::run()`. `src/app.rs` owns desktop startup and `src/cli.rs` preserves headless import. `src/lib.rs` exports `model` and `postman`; the desktop UI consumes that library. `src/ui/mod.rs` owns application state, with navigation in `shell.rs`, request/response editing in `editor.rs`, imports/dialogs in `dialogs.rs`, and reusable controls/styles in `widgets.rs` and `theme.rs`.
 
 ## Verify
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 test
-powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 clippy
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 verify
+python -m unittest discover -s scripts/tests -v
 ```
 
 Tests cover local TCP HTTP fixtures, live collection auth updates and request overrides, variable precedence and recursion, URL-encoded bodies and query auth, Postman hierarchy and storage migration, query synchronization, bulk editing, legacy storage compatibility, draft preservation, divider dragging, and editor/response/viewport layout combinations. Reference and visual-validation details are recorded in [docs/postman-reference.md](docs/postman-reference.md).

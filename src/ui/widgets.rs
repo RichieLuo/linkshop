@@ -1,9 +1,9 @@
 pub use crate::branding::palette::*;
-use crate::model::{Pair, ensure_blank_row};
 use eframe::egui::{
     self, Align, Align2, Color32, FontId, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui,
     Vec2, pos2, vec2,
 };
+use linkshop::model::{Pair, ensure_blank_row};
 
 pub const ROW: f32 = 32.0;
 
@@ -514,7 +514,7 @@ pub fn pairs_ui(
         {
             state.bulk = !state.bulk;
             if state.bulk {
-                state.text = crate::model::bulk_text(pairs);
+                state.text = linkshop::model::bulk_text(pairs);
             }
         }
         let more = icon_button(ui, more_rect, "more", Icon::More, "更多操作");
@@ -546,7 +546,7 @@ pub fn pairs_ui(
             }
         });
         if state.bulk && changed {
-            state.text = crate::model::bulk_text(pairs);
+            state.text = linkshop::model::bulk_text(pairs);
         }
         if !state.bulk {
             for xx in x {
@@ -569,7 +569,7 @@ pub fn pairs_ui(
                     .hint_text("name:value\n// disabled:value"),
             );
             if r.changed() {
-                *pairs = crate::model::parse_bulk(&state.text, pairs);
+                *pairs = linkshop::model::parse_bulk(&state.text, pairs);
                 changed = true;
             }
             return;
