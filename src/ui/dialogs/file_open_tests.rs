@@ -8,7 +8,7 @@ fn shell_import_validates_json_preserves_dirty_request_and_never_sends_it() {
     let dirty = app.tabs[0].request.clone();
     let path = std::env::temp_dir().join(format!("linkshop-导入 空格-{}.json", std::process::id()));
     let collection = serde_json::json!({
-        "info": { "name": "Shell collection", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+        "info": { "name": "Shell collection" },
         "item": [{ "name": "Do not send", "request": { "method": "GET", "url": "http://127.0.0.1:1/never-send" } }]
     });
     std::fs::write(&path, serde_json::to_vec(&collection).unwrap()).unwrap();
@@ -39,7 +39,7 @@ fn invalid_shell_file_does_not_backup_or_change_requests() {
     let mut app = App::with_state(&ctx, vec![], vec![], vec![], 0);
     let before = app.tabs[0].request.clone();
     let path = std::env::temp_dir().join(format!("linkshop-invalid-{}.json", std::process::id()));
-    std::fs::write(&path, b"not a postman collection").unwrap();
+    std::fs::write(&path, b"not a collection document").unwrap();
     app.open_shell_paths_using(std::slice::from_ref(&path), || {
         panic!("invalid file must not backup")
     });

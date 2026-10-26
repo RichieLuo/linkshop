@@ -6,13 +6,13 @@
 | --- | ---: | --- | ---: |
 | `src/ui.rs` | 3526 | `src/ui/mod.rs` | 889 |
 | `src/model.rs` | 714 | `src/model.rs` | 569 |
-| `src/postman.rs` | 934 | `src/postman.rs` | 497 |
+| `src/import.rs` | 934 | `src/import.rs` | 497 |
 
 - `src/ui/mod.rs`：UI 入口保留状态与生命周期；shell、editor、dialogs、actions、theme 和 widgets 分别处理导航、请求响应、窗口、用户动作、样式与控件。测试按认证、集合、标签与布局分组。
 
 - `src/model.rs`：请求模型与参数/变量行为留在模型中，HTTP 执行与请求变量展开移入 model/transport.rs。公共调用路径保持不变。
 
-- `src/postman.rs`：格式解析与本机 profile 文件读取、备份、合并、命令行导入分开。新建 lib.rs 供桌面入口和预览示例共同使用，不再重复编译私有业务模块。
+- `src/import.rs`：格式解析与本机 profile 文件读取、备份、合并、命令行导入分开。新建 lib.rs 供桌面入口和预览示例共同使用，不再重复编译私有业务模块。
 
 所有新增子模块通过正常的 Rust 模块声明连接，不使用 include! 拼接源码。测试仍由 cargo test 自动发现；忽略的实库/显式样本测试保留原忽略条件。
 

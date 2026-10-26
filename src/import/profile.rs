@@ -137,7 +137,7 @@ pub(super) fn backup_profile_in(dir: &Path) -> Result<Option<PathBuf>, String> {
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_nanos();
-    let backup = dir.join(format!("app-before-postman-import-{nonce}.ron"));
+    let backup = dir.join(format!("app-before-import-{nonce}.ron"));
     std::fs::copy(file, &backup).map_err(|e| format!("无法备份现有工作区：{e}"))?;
     Ok(Some(backup))
 }
@@ -169,7 +169,12 @@ pub(super) fn import_profile_in(paths: &[PathBuf], dir: &Path) -> Result<ImportR
     let mut environments = stored(&state, "environments_v1")?;
     let mut globals = stored(&state, "globals_v1")?;
     let mut collection_auth = stored(&state, "collection_auth_v1")?;
-    let mut originals: Vec<String> = stored(&state, "postman_originals_v1")?;
+    let originals_key = if state.contains_key(ORIGINALS_KEY) {
+        ORIGINALS_KEY
+    } else {
+        LEGACY_ORIGINALS_KEY
+    };
+    let mut originals: Vec<String> = stored(&state, originals_key)?;
     let incoming_originals = bundle.originals.clone();
     let mut report = merge(
         &mut saved,
@@ -189,10 +194,11 @@ pub(super) fn import_profile_in(paths: &[PathBuf], dir: &Path) -> Result<ImportR
         ("environments_v1", ron::to_string(&environments)),
         ("globals_v1", ron::to_string(&globals)),
         ("collection_auth_v1", ron::to_string(&collection_auth)),
-        ("postman_originals_v1", ron::to_string(&originals)),
+        (ORIGINALS_KEY, ron::to_string(&originals)),
     ] {
         state.insert(key.into(), value.map_err(|e| e.to_string())?);
     }
+    state.remove(LEGACY_ORIGINALS_KEY);
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| e.to_string())?

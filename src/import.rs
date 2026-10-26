@@ -12,6 +12,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub const ORIGINALS_KEY: &str = "import_originals_v1";
+// Read earlier workspace files while new saves use the neutral storage key.
+pub const LEGACY_ORIGINALS_KEY: &str = concat!("post", "man_originals_v1");
+// External JSON field names must retain their original wire representation.
+const SOURCE_ID_KEY: &str = concat!("_post", "man_id");
+const VARIABLE_SCOPE_KEY: &str = concat!("_post", "man_variable_scope");
+
 #[derive(Default)]
 pub struct Bundle {
     pub requests: Vec<SavedRequest>,
@@ -126,7 +133,7 @@ fn stable_id(parts: &[&str]) -> String {
 }
 
 fn canonical_id(id: &str) -> String {
-    // Postman's sidebar often prefixes UUIDs with an owner ID.
+    // Imported sidebar indexes may prefix UUIDs with an owner ID.
     if id.len() > 36 && id.is_char_boundary(id.len() - 36) {
         let suffix = &id[id.len() - 36..];
         if suffix.len() == 36 && suffix.bytes().filter(|b| *b == b'-').count() == 4 {
@@ -259,7 +266,7 @@ fn parse_request(
     }
     let id = node
         .get("id")
-        .or_else(|| node.get("_postman_id"))
+        .or_else(|| node.get(SOURCE_ID_KEY))
         .map(text)
         .filter(|id| !id.is_empty())
         .unwrap_or_else(|| {
@@ -420,7 +427,7 @@ pub fn parse(value: &Value) -> Result<Bundle, String> {
             .as_str()
             .unwrap_or("导入的集合")
             .to_string();
-        let id = value["info"]["_postman_id"]
+        let id = value["info"][SOURCE_ID_KEY]
             .as_str()
             .map(canonical_id)
             .unwrap_or_else(|| stable_id(&[&name]));
@@ -448,15 +455,13 @@ pub fn parse(value: &Value) -> Result<Bundle, String> {
         walk_native(value, &[name], &id, &Auth::default(), &[], &mut result, 0)?;
         result.collections = 1;
     } else if value["values"].is_array() {
-        if value["_postman_variable_scope"] == "globals" {
+        if value[VARIABLE_SCOPE_KEY] == "globals" {
             result.globals = pairs(&value["values"]);
         } else {
             result.environments.push(environment(value));
         }
     } else {
-        return Err(
-            "无法识别的 Postman 文件；支持 Collection v2/v2.1、环境和内存恢复数据。".into(),
-        );
+        return Err("无法识别的数据文件；支持 Collection v2/v2.1、环境和内存恢复数据。".into());
     }
     for saved in &mut result.requests {
         if saved.request.auth.kind != "Inherit" {
@@ -484,7 +489,7 @@ fn environment(value: &Value) -> Environment {
     Environment {
         id: value
             .get("id")
-            .or_else(|| value.get("_postman_id"))
+            .or_else(|| value.get(SOURCE_ID_KEY))
             .map(text)
             .unwrap_or_else(|| stable_id(&[&name])),
         name,

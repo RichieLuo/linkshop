@@ -17,7 +17,7 @@
 
 ## 项目简介
 
-LinkShop 是使用 Rust 编写的本地 API 调试客户端，采用类似 Postman 的请求工作区。打开即可编辑和发送 HTTP 请求，无需账号、登录或云服务，集合、环境、历史和打开的标签保存在本机。
+LinkShop 是使用 Rust 编写的本地 API 调试客户端，提供集合导航、多标签编辑和请求响应查看工作区。打开即可编辑和发送 HTTP 请求，无需账号、登录或云服务，集合、环境、历史和打开的标签保存在本机。
 
 ## 主要功能
 
@@ -29,7 +29,7 @@ LinkShop 是使用 Rust 编写的本地 API 调试客户端，采用类似 Postm
 | 多标签与草稿保护 | 支持保存、复制以及关闭当前、其他、右侧或全部标签；批量关闭会逐个询问未保存的更改，取消后保留剩余标签，重启可恢复打开的请求。 |
 | 身份验证 | 支持 Bearer Token、Basic Auth、API Key（请求头或查询参数）、无身份验证（No Auth），以及继承集合身份验证。 |
 | 环境与变量 | 可编辑环境、请求及全局变量，使用 `{{变量名}}` 引用；发送时按“当前环境 > 请求变量（含导入的集合、文件夹变量）> 全局变量”的优先级解析。 |
-| Postman 导入 | 支持集合（Collection v2/v2.1）、环境及全局变量 JSON，可通过“导入”输入文件或目录路径，也可拖入文件；保留集合层级、停用项、说明、身份验证和原始 JSON，按来源标识跳过重复请求。 |
+| 数据导入 | 支持集合（Collection v2/v2.1）、环境及全局变量 JSON，可通过“导入”输入文件或目录路径，也可拖入文件；保留集合层级、停用项、说明、身份验证和原始 JSON，按来源标识跳过重复请求。 |
 | 响应与历史 | 查看状态、耗时、大小、JSON 或原始响应体、响应头和响应 Cookie，支持复制响应内容和重新打开历史请求。请求在后台线程执行，超时为 120 秒。 |
 | 桌面界面 | 采用蓝色与青色的狐狸主题，提供可调整的请求/响应分区；Windows 使用统一的紧凑标题栏和系统图标。 |
 
@@ -57,7 +57,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 run
 
 1. 新建请求，输入 `http://` 或 `https://` URL，选择请求方法。
 2. 按需配置参数、请求头、身份验证、请求体及环境，点击“发送”。
-3. 保存常用请求，或通过“导入”载入 Postman 数据；导入本身不会发送请求。
+3. 保存常用请求，或通过“导入”载入集合和环境数据；导入本身不会发送请求。
 
 | 快捷键 | 操作 |
 | --- | --- |
@@ -85,7 +85,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\package.ps1 -Install -OutputD
 
 ### 文件关联
 
-安装会把 `.json` 注册到“打开方式”，**仅用于 LinkShop 支持的 Postman 数据，并非通用 JSON 编辑器**。在文件右键菜单选择 LinkShop 即可导入，也可手动传入路径：
+安装会把 `.json` 注册到“打开方式”，**仅用于 LinkShop 支持的集合和环境数据，并非通用 JSON 编辑器**。在文件右键菜单选择 LinkShop 即可导入，也可手动传入路径：
 
 ```powershell
 .\linkshop.exe --open "C:\exports\collection.json"
@@ -125,7 +125,7 @@ macOS/Linux 使用 `python3 scripts/package.py` 打包，产物为 tar.gz。详�
 
 ### 本地数据
 
-工作区由 eframe 在本地持久化。Windows 数据目录为 `%APPDATA%\LinkShop\data\`，包含 `app.ron`；请求、环境、历史、标签及凭据均保存在本机文件中。导入前自动备份已有工作区，保留原始 Postman JSON，未支持的导入配置会显示兼容性提示。
+工作区由 eframe 在本地持久化。Windows 数据目录为 `%APPDATA%\LinkShop\data\`，包含 `app.ron`；请求、环境、历史、标签及凭据均保存在本机文件中。导入前自动备份已有工作区，保留导入的原始 JSON，未支持的导入配置会显示兼容性提示。
 
 #### 命令行导入
 
@@ -135,11 +135,11 @@ macOS/Linux 使用 `python3 scripts/package.py` 打包，产物为 tar.gz。详�
 .\linkshop.exe import "C:\exports\collections.json" "C:\exports\environment.json"
 ```
 
-此命令直接读写本地工作区，不经过图形界面单实例转发；不要与正在保存工作区的窗口同时使用。导入前生成 `app-before-postman-import-*.ron` 备份，结果写入同目录的 `last-import-report.json`，不会发送导入的请求。
+此命令直接读写本地工作区，不经过图形界面单实例转发；不要与正在保存工作区的窗口同时使用。导入前生成 `app-before-import-*.ron` 备份，结果写入同目录的 `last-import-report.json`，不会发送导入的请求。
 
 ### 支持范围
 
-请求使用 HTTP/HTTPS，支持原始文本和表单编码请求体。文件导入面向上述 Postman 格式，单个文件不得超过 64 MiB；目录导入递归深度最多 32 层，跳过符号链接。
+请求使用 HTTP/HTTPS，支持原始文本和表单编码请求体。文件导入面向上述集合、环境及全局变量 JSON 格式，单个文件不得超过 64 MiB；目录导入递归深度最多 32 层，跳过符号链接。
 
 ### 使用限制
 
@@ -154,17 +154,17 @@ macOS/Linux 使用 `python3 scripts/package.py` 打包，产物为 tar.gz。详�
 | `src/main.rs`、`src/app.rs` | 桌面入口与窗口启动 |
 | `src/shell_open.rs`、`src/cli.rs` | 图形界面文件打开与单实例转发、无界面导入 |
 | `src/model.rs`、`src/model/` | 请求、身份验证、变量与 HTTP 传输 |
-| `src/postman.rs`、`src/postman/` | Postman 解析、合并、备份及持久化 |
+| `src/import.rs`、`src/import/` | 数据导入解析、合并、备份及持久化 |
 | `src/ui/` | 应用状态、导航、编辑器、对话框、控件与界面测试 |
 | `src/branding.rs`、`src/branding_icon.rs`、`assets/branding/` | 品牌资源、配色与图标生成 |
 | `scripts/`、`docs/` | 开发、打包、安装工具及维护文档 |
 
-`src/lib.rs` 导出业务模块，桌面界面通过库调用业务逻辑。测试覆盖请求与鉴权、变量、Postman 导入及存储兼容、草稿保护和界面布局。
+`src/lib.rs` 导出业务模块，桌面界面通过库调用业务逻辑。测试覆盖请求与鉴权、变量、数据导入及存储兼容、草稿保护和界面布局。
 
 - [架构与打包约定](docs/architecture.md)
 - [Windows 用户安装与文件打开方式](docs/windows-installation.md)
 - [图标与标题栏规范](docs/branding.md)
-- [Postman 工作区参考与验证记录](docs/postman-reference.md)
+- [请求工作区与验证记录](docs/workspace-reference.md)
 
 ## 许可证
 

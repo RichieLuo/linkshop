@@ -194,7 +194,7 @@ pub struct App {
     notice: Option<(String, Instant)>,
     environments: Vec<Environment>,
     globals: Vec<Pair>,
-    postman_originals: Vec<String>,
+    import_originals: Vec<String>,
     selected_environment: String,
     show_variables: bool,
     variables_scope: usize,
@@ -228,8 +228,9 @@ impl App {
         if let Some(storage) = cc.storage {
             app.environments = eframe::get_value(storage, "environments_v1").unwrap_or_default();
             app.globals = eframe::get_value(storage, "globals_v1").unwrap_or_default();
-            app.postman_originals =
-                eframe::get_value(storage, "postman_originals_v1").unwrap_or_default();
+            app.import_originals = eframe::get_value(storage, linkshop::import::ORIGINALS_KEY)
+                .or_else(|| eframe::get_value(storage, linkshop::import::LEGACY_ORIGINALS_KEY))
+                .unwrap_or_default();
             app.selected_environment =
                 eframe::get_value(storage, "selected_environment_v1").unwrap_or_default();
             app.collection_auth =
@@ -295,7 +296,7 @@ impl App {
             notice: None,
             environments: vec![],
             globals: vec![],
-            postman_originals: vec![],
+            import_originals: vec![],
             selected_environment: String::new(),
             show_variables: false,
             variables_scope: 0,
@@ -350,7 +351,11 @@ impl eframe::App for App {
         eframe::set_value(storage, "environments_v1", &self.environments);
         eframe::set_value(storage, "globals_v1", &self.globals);
         eframe::set_value(storage, "collection_auth_v1", &self.collection_auth);
-        eframe::set_value(storage, "postman_originals_v1", &self.postman_originals);
+        eframe::set_value(
+            storage,
+            linkshop::import::ORIGINALS_KEY,
+            &self.import_originals,
+        );
         eframe::set_value(
             storage,
             "selected_environment_v1",

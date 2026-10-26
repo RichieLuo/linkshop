@@ -26,8 +26,8 @@ APPLICATIONS = {
         "SQL": ("SQL script", [".sql"]),
         "SQLite": ("SQLite database", [".sqlite", ".sqlite3", ".db", ".db3"]),
     }),
-    "linkshop": ("LinkShop", "Postman collections and environments", {
-        "PostmanJSON": ("Postman collection or environment", [".json"]),
+    "linkshop": ("LinkShop", "API collections and environments", {
+        "CollectionJSON": ("API collection or environment", [".json"]),
     }),
     "rpshop": ("RPShop", "RPShop projects and supported native RP documents", {
         "Project": ("RPShop project", [".rpshop"]),

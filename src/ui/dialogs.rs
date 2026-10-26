@@ -2,7 +2,7 @@ use super::*;
 
 impl App {
     pub(super) fn import_files(&mut self, paths: &[PathBuf]) {
-        self.import_files_using(paths, || linkshop::postman::backup_profile().map(|_| ()));
+        self.import_files_using(paths, || linkshop::import::backup_profile().map(|_| ()));
     }
 
     fn import_files_using(
@@ -10,14 +10,14 @@ impl App {
         paths: &[PathBuf],
         backup: impl FnOnce() -> Result<(), String>,
     ) {
-        let result = linkshop::postman::load(paths).and_then(|bundle| {
+        let result = linkshop::import::load(paths).and_then(|bundle| {
             backup()?;
             for original in &bundle.originals {
-                if !self.postman_originals.contains(original) {
-                    self.postman_originals.push(original.clone());
+                if !self.import_originals.contains(original) {
+                    self.import_originals.push(original.clone());
                 }
             }
-            Ok(linkshop::postman::merge(
+            Ok(linkshop::import::merge(
                 &mut self.saved,
                 &mut self.environments,
                 &mut self.globals,
@@ -57,7 +57,7 @@ impl App {
         };
         match request {
             Ok(Some(paths)) if !paths.is_empty() => self
-                .open_shell_paths_using(&paths, || linkshop::postman::backup_profile().map(|_| ())),
+                .open_shell_paths_using(&paths, || linkshop::import::backup_profile().map(|_| ())),
             Err(error) => {
                 self.import_message = format!("读取文件打开请求失败：{error}");
                 self.show_import = true;
@@ -78,7 +78,7 @@ impl App {
                     .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
         }) {
             self.import_message = format!(
-                "无法导入 {}：请选择已有的 Postman JSON 文件",
+                "无法导入 {}：请选择已有的集合或环境 JSON 文件",
                 path.display()
             );
             self.show_import = true;
@@ -130,7 +130,7 @@ impl App {
         }
         if self.show_import {
             let mut visible = true;
-            egui::Window::new("导入 Postman 数据")
+            egui::Window::new("导入数据")
                 .id(egui::Id::new("import_window"))
                 .open(&mut visible)
                 .resizable(false)
@@ -143,7 +143,7 @@ impl App {
                     ui.add_sized(
                         [540., 32.],
                         egui::TextEdit::singleline(&mut self.import_path)
-                            .hint_text("C:\\路径\\collection.postman_collection.json"),
+                            .hint_text("C:\\路径\\collection.json"),
                     );
                     ui.add_space(10.);
                     if ui

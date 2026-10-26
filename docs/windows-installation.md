@@ -45,14 +45,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 -PackageDirectory
 
 每次启动都解析最新指针，并将原始 Windows 参数转交给对应程序，支持空格和中文路径。已运行的实例保留当前会话；关闭后重新打开才使用新版本。安装器不会强杀进程、替换正在运行的程序或删除旧版本目录，因此不影响未保存的工作。旧目录暂不自动清理。
 
-三个仓库共用相同的 `src/shell_open.rs`。Windows 下，同一用户登录会话中的同一产品只保留一个 GUI 实例；从开始菜单或文件再次启动会向现有窗口转发请求并恢复、聚焦窗口。SQLShop 只载入 SQL 文件供编辑，不自动执行；SQLite 使用已有本地数据库入口。LinkShop 调用已有 Postman collection / environment 导入。RPShop 打开文件前保留现有未保存确认流程。纯命令行功能继续独立运行，不占用 GUI 单实例入口。
+三个仓库共用相同的 `src/shell_open.rs`。Windows 下，同一用户登录会话中的同一产品只保留一个 GUI 实例；从开始菜单或文件再次启动会向现有窗口转发请求并恢复、聚焦窗口。SQLShop 只载入 SQL 文件供编辑，不自动执行；SQLite 使用已有本地数据库入口。LinkShop 调用已有 集合和环境 JSON 导入。RPShop 打开文件前保留现有未保存确认流程。纯命令行功能继续独立运行，不占用 GUI 单实例入口。
 
 ## 文件类型与默认应用
 
 | 工具 | 注册到“打开方式”的类型 |
 | --- | --- |
 | SQLShop | `.sql`、`.sqlite`、`.sqlite3`、`.db`、`.db3` |
-| LinkShop | `.json`，用于 Postman collection / environment |
+| LinkShop | `.json`，用于 集合和环境 JSON |
 | RPShop | `.rpshop`、`.rp`、`.rplib`、`.json` |
 
 `.json`、`.db` 等通用扩展名可能属于其他工具；文件仍需符合所选应用实际支持的格式。脚本在 HKCU 注册 `App Paths`、应用/ProgID 打开命令、`OpenWithProgids`、`SupportedTypes` 和 `Capabilities` / `RegisteredApplications`，保留现有扩展名默认值及受保护的 `UserChoice`。注册本身不会静默切换默认应用。

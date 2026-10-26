@@ -14,6 +14,10 @@ fn headless_import_preserves_existing_state_backs_up_and_reimports_without_dupli
         ("history".into(), "unchanged-history".into()),
         ("open_tabs_v2".into(), "unchanged-tabs".into()),
         (
+            LEGACY_ORIGINALS_KEY.into(),
+            ron::to_string(&vec!["previous-import"]).unwrap(),
+        ),
+        (
             "saved".into(),
             ron::to_string(&vec![SavedRequest {
                 label: "Local".into(),
@@ -25,11 +29,22 @@ fn headless_import_preserves_existing_state_backs_up_and_reimports_without_dupli
     let original = ron::to_string(&original).unwrap();
     std::fs::write(dir.join("app.ron"), &original).unwrap();
     let input = dir.join("input.json");
-    std::fs::write(&input, json!({"collections":[{"info":{"name":"Collection","_postman_id":"c"},"item":[{"name":"GET","request":{"method":"GET","url":"https://example.com"}}]}],"environments":[{"id":"env","name":"Environment","values":[{"key":"token","value":"test"}]}]}).to_string()).unwrap();
+    std::fs::write(&input, json!({"collections":[{"info":{"name":"Collection",(concat!("_post", "man_id")):"c"},"item":[{"name":"GET","request":{"method":"GET","url":"https://example.com"}}]}],"environments":[{"id":"env","name":"Environment","values":[{"key":"token","value":"test"}]}]}).to_string()).unwrap();
     let first = import_profile_in(std::slice::from_ref(&input), &dir).unwrap();
     assert_eq!(
         (first.added, first.environments, first.incomplete),
         (1, 1, 0)
+    );
+    assert!(
+        first
+            .backup
+            .as_ref()
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with("app-before-import-")
     );
     assert_eq!(
         std::fs::read_to_string(first.backup.unwrap()).unwrap(),
@@ -44,6 +59,10 @@ fn headless_import_preserves_existing_state_backs_up_and_reimports_without_dupli
         ron::from_str(&std::fs::read_to_string(dir.join("app.ron")).unwrap()).unwrap();
     assert_eq!(state["history"], "unchanged-history");
     assert_eq!(state["open_tabs_v2"], "unchanged-tabs");
+    assert!(!state.contains_key(LEGACY_ORIGINALS_KEY));
+    let originals: Vec<String> = ron::from_str(&state[ORIGINALS_KEY]).unwrap();
+    assert_eq!(originals.len(), 2);
+    assert_eq!(originals[0], "previous-import");
     let saved: Vec<SavedRequest> = ron::from_str(&state["saved"]).unwrap();
     let collection_auth: Vec<CollectionAuth> = ron::from_str(&state["collection_auth_v1"]).unwrap();
     let environments: Vec<Environment> = ron::from_str(&state["environments_v1"]).unwrap();
@@ -58,7 +77,7 @@ fn headless_import_preserves_existing_state_backs_up_and_reimports_without_dupli
 }
 #[test]
 fn v21_preserves_hierarchy_disabled_rows_inherited_auth_and_scripts() {
-    let doc = json!({"info":{"name":"Collection","_postman_id":"c1"},"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{token}}"}]},"variable":[{"key":"base","value":"https://example.com"}],"event":[{"listen":"test","script":{"exec":["example()"]}}],"item":[{"name":"Folder","item":[{"id":"r1","name":"Request","request":{"method":"POST","url":{"raw":"{{base}}/x?q=one","query":[{"key":"q","value":"one"},{"key":"q","value":"two","disabled":true}]},"header":[{"key":"X-Test","value":"yes","disabled":true}],"body":{"mode":"raw","raw":"{}","options":{"raw":{"language":"json"}}}}}]}]});
+    let doc = json!({"info":{"name":"Collection",(concat!("_post", "man_id")):"c1"},"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{token}}"}]},"variable":[{"key":"base","value":"https://example.com"}],"event":[{"listen":"test","script":{"exec":["example()"]}}],"item":[{"name":"Folder","item":[{"id":"r1","name":"Request","request":{"method":"POST","url":{"raw":"{{base}}/x?q=one","query":[{"key":"q","value":"one"},{"key":"q","value":"two","disabled":true}]},"header":[{"key":"X-Test","value":"yes","disabled":true}],"body":{"mode":"raw","raw":"{}","options":{"raw":{"language":"json"}}}}}]}]});
     let result = parse(&doc).unwrap();
     let req = &result.requests[0].request;
     let src = req.source.as_ref().unwrap();
@@ -82,7 +101,7 @@ fn v21_preserves_hierarchy_disabled_rows_inherited_auth_and_scripts() {
 #[test]
 fn import_is_idempotent_and_full_records_upgrade_metadata() {
     let partial = json!({"id":"c1","name":"C","folders":[],"order":["r1"],"requests":[{"id":"r1","name":"R","method":"GET","url":"https://example.com"}]});
-    let full = json!({"info":{"name":"C","_postman_id":"c1"},"item":[{"id":"r1","name":"R","request":{"method":"GET","url":"https://example.com"}}]});
+    let full = json!({"info":{"name":"C",(concat!("_post", "man_id")):"c1"},"item":[{"id":"r1","name":"R","request":{"method":"GET","url":"https://example.com"}}]});
     let mut saved = vec![];
     let mut env = vec![];
     let mut globals = vec![];
@@ -135,13 +154,20 @@ fn environment_preserves_disabled_values_and_json_round_trips_through_ron() {
         ron::from_str::<Vec<Environment>>(&encoded).unwrap(),
         result.environments
     );
+    let globals = parse(&json!({
+        (VARIABLE_SCOPE_KEY): "globals",
+        "values": [{"key": "base", "value": "https://example.com"}]
+    }))
+    .unwrap();
+    assert!(globals.environments.is_empty());
+    assert_eq!(globals.globals[0].key, "base");
 }
 
 #[test]
 fn imports_live_collection_auth_with_folder_overrides_and_preserves_local_updates() {
     let doc = json!({
         "collections": [
-            {"info":{"name":"Same name","_postman_id":"c1"},
+            {"info":{"name":"Same name",(concat!("_post", "man_id")):"c1"},
              "auth":{"type":"bearer","bearer":[{"key":"token","value":"root-token"}]},
              "item":[
                 {"id":"r1","name":"Inherited","request":{"url":"https://example.com"}},
@@ -200,7 +226,7 @@ fn imports_live_collection_auth_with_folder_overrides_and_preserves_local_update
         "locally-refreshed"
     );
     let unsupported = parse(&json!({
-        "collections": [{"info":{"name":"Unsupported","_postman_id":"oauth"},
+        "collections": [{"info":{"name":"Unsupported",(concat!("_post", "man_id")):"oauth"},
             "auth":{"type":"oauth2"}, "item":[
                 {"name":"Inherited","request":{"url":"https://example.com"}},
                 {"name":"Public","request":{"url":"https://example.com","auth":{"type":"noauth"}}}

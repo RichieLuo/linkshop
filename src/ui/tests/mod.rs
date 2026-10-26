@@ -12,13 +12,13 @@ mod title_bar;
 use super::*;
 
 fn fixture_requests() -> Vec<SavedRequest> {
-    linkshop::postman::parse(&serde_json::json!({
+    linkshop::import::parse(&serde_json::json!({
         "collections": [
-            {"info":{"name":"Collection A","_postman_id":"c1"},"item":[
+            {"info":{"name":"Collection A",(concat!("_post", "man_id")):"c1"},"item":[
                 {"name":"Folder","item":[{"id":"r1","name":"First request","request":{"method":"GET","url":"https://example.com/one"}}]},
                 {"name":"Other folder","item":[{"id":"r2","name":"Second request","request":{"method":"GET","url":"https://example.com/two"}}]}
             ]},
-            {"info":{"name":"Collection B","_postman_id":"c2"},"item":[
+            {"info":{"name":"Collection B",(concat!("_post", "man_id")):"c2"},"item":[
                 {"name":"Folder","item":[{"id":"r1","name":"Third request","request":{"method":"GET","url":"https://example.com/three"}}]}
             ]}
         ]

@@ -1,8 +1,6 @@
-# Postman request workspace reference
+# Request workspace and validation records
 
-Reference: installed Postman 11.86.1, analyzed on 2026-10-24 with REA.
-
-Artifact: `C:\Users\adm\AppData\Local\Postman\app-11.86.1\resources\app.asar`
+Historical reference: a locally installed API client, version 11.86.1, analyzed on 2026-10-24 with REA. The installation artifact was `resources/app.asar`.
 
 SHA-256: `e140a9a5fe44205575d7cb073e373174634b216a14579e6bdef6240727f6df94`
 
@@ -21,18 +19,18 @@ Implemented areas:
 - Query parameters and headers use a common grid for headers and cells, descriptions, resizable columns, automatic blank rows, bulk edit, enabled toggles, and row hover actions.
 - Query updates synchronize with the URL without appending parameters twice. Disabled rows and descriptions are retained.
 
-During the UI reconstruction, Postman was briefly opened for an initial visual comparison, then closed after the user requested static inspection. Subsequent UI reference work used installation artifacts. The later, separately requested data migration is described below. No user API request was sent or Postman collection edited.
+During the UI reconstruction, the reference application was briefly opened for an initial visual comparison, then closed after the user requested static inspection. Subsequent UI reference work used installation artifacts. The later, separately requested data migration is described below. No user API request was sent or source collection edited.
 
 LinkShop visual acceptance resumed after the user requested continuation. Verified the colored method popup, query rows, disabled query synchronization, independent request tabs, session restoration, response rendering, save dialog, sidebar updates, and live search. A local echo server returned 200 and confirmed that disabled parameters were omitted and repeated keys were not duplicated. The workspace was checked at large size and in an approximately 1120px-wide native window. Temporary validation requests were removed by restoring the pre-validation workspace backup.
 
 Visual checks uncovered and fixed an oversized logo expanding the header, duplicate IDs shared by request and response tabs, checkbox alignment, bulk-header overlap, and absolute field placement affecting later layout. The new-tab action now sits next to the tab strip and reveals newly created tabs when the strip overflows. Seven automated tests cover request semantics, compatibility, draft preservation, both dividers' drag behavior, and 48 editor/response/viewport combinations without ID clashes or panel overflow. `cargo fmt --check`, Clippy with warnings denied, and the debug build complete successfully.
 
-This is a reconstruction of the request workspace, not a claim of complete Postman feature or pixel equivalence. Script execution, multipart/binary body sending, dynamic variables, and collaboration remain outside the implemented scope. Environments, nested collection navigation, URL-encoded bodies, and Postman imports are supported in 0.2.0.
+The implemented scope covers the local request workspace. Script execution, multipart/binary body sending, dynamic variables, and collaboration remain outside that scope. Environments, nested collection navigation, URL-encoded bodies, and collection/environment JSON imports are supported in 0.2.0.
 
 
-## Postman data migration (0.2.0)
+## Data migration (0.2.0)
 
-The user requested a background migration so they could keep using the computer. REA Frida read-only renderer scans recovered collection and request indexes, but those indexes did not contain every request body or auth definition. They were not treated as complete requests. A provider-owned hidden Postman process was then spawned with visibility/focus suppression hooks installed before resuming; no foreground UI automation was used for the completed extraction.
+The user requested a background migration so they could keep using the computer. REA Frida read-only renderer scans recovered collection and request indexes, but those indexes did not contain every request body or auth definition. They were not treated as complete requests. A provider-owned hidden source application process was then spawned with visibility/focus suppression hooks installed before resuming; no foreground UI automation was used for the completed extraction.
 
 In the installed 11.86.1 runtime, loaded webpack module 619700 exports `fetchCollection(uid)`, which invokes the normal read-only Collection 2.1 export path (`findOneFromSyncWithFormat`). Environment store module 728530 exports `getOneFromSyncUncached(uid)`. These functions were read and invoked through loopback CDP in the existing authenticated app context. They returned complete collection/environment JSON without extracting session cookies or account credentials. The temporary background process and REA session were closed after export. Module numbers are specific to this installed version.
 
@@ -65,6 +63,6 @@ Headless egui pointer-event tests exercise right-click menus on collection, fold
 
 Collection roots now expose a “集合身份验证” context-menu action. The dialog edits a separate local collection-auth record keyed by collection ID, offers explicit bulk conversion of existing requests, and saves or cancels without sending requests. Request editors offer collection inheritance, independent auth, and No Auth, with a shortcut to edit the collection. Requests created from a collection/folder default to inheritance. Existing profiles retain their previous per-request settings until converted.
 
-The send path reads the current collection configuration before resolving variables; it never copies credentials into inheriting editors or history. Bulk conversion updates saved requests and open-tab baselines while preserving unrelated dirty edits, disables old credential rows, and refreshes any bulk-edit buffers. Configured auth replaces matching manual headers/query parameters on the wire. Postman imports keep collection auth separate, preserve nested-folder/request overrides, and retain local collection-token updates on reimport. GUI and headless imports persist the same collection-auth storage key.
+The send path reads the current collection configuration before resolving variables; it never copies credentials into inheriting editors or history. Bulk conversion updates saved requests and open-tab baselines while preserving unrelated dirty edits, disables old credential rows, and refreshes any bulk-edit buffers. Configured auth replaces matching manual headers/query parameters on the wire. JSON imports keep collection auth separate, preserve nested-folder/request overrides, and retain local collection-token updates on reimport. GUI and headless imports persist the same collection-auth storage key.
 
 Synthetic local TCP fixtures verify token changes on successive sends from an already-open request, environment precedence, collection isolation, Basic Auth and No Auth overrides, and duplicate-credential removal. Headless UI tests cover opening, cancelling, and saving the dialog at small/large viewports, bulk conversion, rename-stable identity, dirty draft preservation, and persistence. No real profile or remote API is used by these tests.

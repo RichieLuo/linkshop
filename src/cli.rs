@@ -1,8 +1,8 @@
-use linkshop::postman;
+use linkshop::import;
 
 pub fn run(args: &[std::ffi::OsString]) -> bool {
     if args.first().is_some_and(|arg| arg == "import") {
-        match postman::import_profile(
+        match import::import_profile(
             &args[1..]
                 .iter()
                 .map(std::path::PathBuf::from)

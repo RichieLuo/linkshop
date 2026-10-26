@@ -3,7 +3,7 @@ name = "linkshop"
 version = "1.0.0"
 edition = "2024"
 rust-version = "1.89"
-description = "A local-first Postman-style API client"
+description = "A local-first API debugging client"
 
 [package.metadata.shop]
 product-name = "LinkShop"

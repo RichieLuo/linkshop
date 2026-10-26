@@ -148,10 +148,10 @@ impl App {
                         pos2(header.right() - 118., header.top() + 7.),
                         vec2(50., 26.),
                     ),
-                    "import_postman",
+                    "import_data",
                     "导入",
                 )
-                .on_hover_text("导入 Postman 集合、环境或数据文件夹")
+                .on_hover_text("导入集合、环境或数据文件夹")
                 .clicked()
                 {
                     self.show_import = true;

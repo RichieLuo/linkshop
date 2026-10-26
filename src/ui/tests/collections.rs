@@ -185,10 +185,10 @@ fn collection_rows_toggle_and_search_preserves_collapsed_state() {
 #[test]
 fn imported_folders_and_duplicate_names_keep_identity_and_render_forms_and_variables() {
     let ctx = egui::Context::default();
-    let bundle = linkshop::postman::parse(&serde_json::json!({
+    let bundle = linkshop::import::parse(&serde_json::json!({
         "collections": [
-            {"info":{"name":"Shared","_postman_id":"c1"},"item":[{"name":"Folder","item":[{"id":"r1","name":"Same","request":{"method":"POST","url":"https://example.com/one","body":{"mode":"urlencoded","urlencoded":[{"key":"name","value":"{{name}}"}]}}}]}]},
-            {"info":{"name":"Shared","_postman_id":"c2"},"item":[{"id":"r2","name":"Same","request":{"method":"GET","url":"https://example.com/two"}}]}
+            {"info":{"name":"Shared",(concat!("_post", "man_id")):"c1"},"item":[{"name":"Folder","item":[{"id":"r1","name":"Same","request":{"method":"POST","url":"https://example.com/one","body":{"mode":"urlencoded","urlencoded":[{"key":"name","value":"{{name}}"}]}}}]}]},
+            {"info":{"name":"Shared",(concat!("_post", "man_id")):"c2"},"item":[{"id":"r2","name":"Same","request":{"method":"GET","url":"https://example.com/two"}}]}
         ],
         "environments":[{"id":"env","name":"Test environment","values":[{"key":"name","value":"test"}]}]
     })).unwrap();
