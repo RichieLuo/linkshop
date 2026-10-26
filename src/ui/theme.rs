@@ -55,65 +55,66 @@ pub(super) fn set_style(ctx: &egui::Context) {
     ctx.set_style(style);
 }
 
+#[cfg(target_os = "windows")]
 pub(super) fn install_fonts(ctx: &egui::Context) {
-    #[cfg(target_os = "windows")]
-    {
-        let fonts = std::env::var_os("WINDIR")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows"))
-            .join("Fonts");
-        let mut definitions = egui::FontDefinitions::default();
-        for (name, paths, primary) in [
-            ("LinkShop-UI", vec!["segoeui.ttf"], true),
-            (
-                "LinkShop-CJK",
-                vec!["msyh.ttc", "msjh.ttc", "simsun.ttc"],
-                false,
-            ),
-        ] {
-            if let Some(bytes) = paths.iter().find_map(|p| std::fs::read(fonts.join(p)).ok()) {
-                definitions.font_data.insert(
-                    name.into(),
-                    std::sync::Arc::new(egui::FontData::from_owned(bytes)),
-                );
-                if primary {
+    let fonts = std::env::var_os("WINDIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows"))
+        .join("Fonts");
+    let mut definitions = egui::FontDefinitions::default();
+    for (name, paths, primary) in [
+        ("LinkShop-UI", vec!["segoeui.ttf"], true),
+        (
+            "LinkShop-CJK",
+            vec!["msyh.ttc", "msjh.ttc", "simsun.ttc"],
+            false,
+        ),
+    ] {
+        if let Some(bytes) = paths.iter().find_map(|p| std::fs::read(fonts.join(p)).ok()) {
+            definitions.font_data.insert(
+                name.into(),
+                std::sync::Arc::new(egui::FontData::from_owned(bytes)),
+            );
+            if primary {
+                definitions
+                    .families
+                    .get_mut(&egui::FontFamily::Proportional)
+                    .unwrap()
+                    .insert(0, name.into());
+            } else {
+                for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
                     definitions
                         .families
-                        .get_mut(&egui::FontFamily::Proportional)
+                        .get_mut(&family)
                         .unwrap()
-                        .insert(0, name.into());
-                } else {
-                    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-                        definitions
-                            .families
-                            .get_mut(&family)
-                            .unwrap()
-                            .push(name.into());
-                    }
+                        .push(name.into());
                 }
             }
         }
-        let mut semibold = vec![];
-        for (name, filename) in [
-            ("LinkShop-UI-Semibold", "seguisb.ttf"),
-            ("LinkShop-CJK-Bold", "msyhbd.ttc"),
-        ] {
-            if let Ok(bytes) = std::fs::read(fonts.join(filename)) {
-                definitions.font_data.insert(
-                    name.into(),
-                    std::sync::Arc::new(egui::FontData::from_owned(bytes)),
-                );
-                semibold.push(name.into());
-            }
-        }
-        semibold.extend(
-            definitions.families[&egui::FontFamily::Proportional]
-                .iter()
-                .cloned(),
-        );
-        definitions
-            .families
-            .insert(egui::FontFamily::Name("LinkShop-Semibold".into()), semibold);
-        ctx.set_fonts(definitions);
     }
+    let mut semibold = vec![];
+    for (name, filename) in [
+        ("LinkShop-UI-Semibold", "seguisb.ttf"),
+        ("LinkShop-CJK-Bold", "msyhbd.ttc"),
+    ] {
+        if let Ok(bytes) = std::fs::read(fonts.join(filename)) {
+            definitions.font_data.insert(
+                name.into(),
+                std::sync::Arc::new(egui::FontData::from_owned(bytes)),
+            );
+            semibold.push(name.into());
+        }
+    }
+    semibold.extend(
+        definitions.families[&egui::FontFamily::Proportional]
+            .iter()
+            .cloned(),
+    );
+    definitions
+        .families
+        .insert(egui::FontFamily::Name("LinkShop-Semibold".into()), semibold);
+    ctx.set_fonts(definitions);
 }
+
+#[cfg(not(target_os = "windows"))]
+pub(super) fn install_fonts(_: &egui::Context) {}
