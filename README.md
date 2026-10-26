@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/branding/linkshop-fox-logo.png" alt="LinkShop · 狐狸 Logo" width="560">
+</p>
+
 # LinkShop
 
 LinkShop is a local-first Rust desktop API client inspired by Postman. It opens directly into the request workspace and has no account, login, or cloud requirement.

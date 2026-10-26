@@ -354,6 +354,8 @@ mod tests {
                         Err(error) => panic!("{error}"),
                     }
                 };
+                // Windows can inherit the listener's nonblocking mode.
+                socket.set_nonblocking(false).unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(5)))
                     .unwrap();

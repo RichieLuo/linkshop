@@ -1474,10 +1474,12 @@ version = "0.2.4"
 dependencies = [
  "eframe",
  "image",
+ "raw-window-handle",
  "reqwest",
  "ron",
  "serde",
  "serde_json",
+ "windows-sys 0.61.2",
  "winres",
 ]
 

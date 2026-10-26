@@ -1,6 +1,56 @@
 use super::*;
 
 impl App {
+    #[cfg(target_os = "windows")]
+    pub(super) fn top_bar(&mut self, ctx: &egui::Context) {
+        egui::TopBottomPanel::top("app_header")
+            .exact_height(window_chrome::TITLE_HEIGHT)
+            .frame(
+                egui::Frame::new()
+                    .fill(window_chrome::title_fill(ctx))
+                    .inner_margin(0.),
+            )
+            .show(ctx, |ui| {
+                ui.spacing_mut().item_spacing.x = 0.;
+                ui.horizontal(|ui| {
+                    ui.set_height(window_chrome::TITLE_HEIGHT);
+                    ui.add_space(window_chrome::leading_inset());
+                    let brand = ui.allocate_ui_with_layout(
+                        vec2(160., window_chrome::TITLE_HEIGHT),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            ui.add_space(16.);
+                            ui.add(
+                                egui::Image::new(&self.mascot)
+                                    .fit_to_exact_size(vec2(28., 28.))
+                                    .alt_text("LinkShop 狐狸 Logo"),
+                            );
+                            ui.add_space(8.);
+                            ui.label(
+                                RichText::new("LinkShop")
+                                    .strong()
+                                    .size(18.)
+                                    .color(egui::Color32::from_rgb(30, 40, 48)),
+                            );
+                        },
+                    );
+                    let drag = ui.interact(
+                        brand.response.rect,
+                        ui.id().with("title-brand-drag"),
+                        Sense::click_and_drag(),
+                    );
+                    window_chrome::drag_response(&drag);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        window_chrome::controls(ui);
+                        ui.add_space(16.);
+                        ui.label(RichText::new("● 本地工作区").size(12.).color(MUTED));
+                        window_chrome::drag_area(ui);
+                    });
+                });
+            });
+    }
+
+    #[cfg(not(target_os = "windows"))]
     pub(super) fn top_bar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("app_header")
             .exact_height(48.)

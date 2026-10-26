@@ -20,6 +20,9 @@ fn open_requests_send_current_collection_auth_and_keep_request_overrides() {
                 }
                 Err(error) => panic!("{error}"),
             };
+            // Accepted sockets can inherit the listener's nonblocking mode on
+            // Windows; the fixture reads a complete request with a timeout.
+            socket.set_nonblocking(false).unwrap();
             socket
                 .set_read_timeout(Some(Duration::from_secs(5)))
                 .unwrap();

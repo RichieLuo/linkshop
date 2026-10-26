@@ -8,6 +8,8 @@ mod editor;
 mod shell;
 mod theme;
 mod widgets;
+#[cfg(target_os = "windows")]
+mod window_chrome;
 use theme::{install_fonts, set_style};
 
 #[cfg(test)]
@@ -204,6 +206,8 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        #[cfg(target_os = "windows")]
+        window_chrome::configure_window(cc);
         let saved = cc
             .storage
             .and_then(|s| eframe::get_value(s, "saved"))
@@ -243,6 +247,9 @@ impl App {
     ) -> Self {
         install_fonts(ctx);
         set_style(ctx);
+        #[cfg(target_os = "windows")]
+        let mascot = crate::branding::title_texture(ctx);
+        #[cfg(not(target_os = "windows"))]
         let mascot = crate::branding::texture(ctx);
         let mut tabs: Vec<_> = session
             .into_iter()
@@ -361,6 +368,7 @@ impl eframe::App for App {
         eframe::set_value(storage, "active_tab_v2", &self.active);
     }
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_shell_open(ctx);
         let dropped: Vec<_> = ctx.input(|i| {
             i.raw
                 .dropped_files

@@ -2,8 +2,16 @@ use super::*;
 
 impl App {
     pub(super) fn import_files(&mut self, paths: &[PathBuf]) {
+        self.import_files_using(paths, || linkshop::postman::backup_profile().map(|_| ()));
+    }
+
+    fn import_files_using(
+        &mut self,
+        paths: &[PathBuf],
+        backup: impl FnOnce() -> Result<(), String>,
+    ) {
         let result = linkshop::postman::load(paths).and_then(|bundle| {
-            linkshop::postman::backup_profile()?;
+            backup()?;
             for original in &bundle.originals {
                 if !self.postman_originals.contains(original) {
                     self.postman_originals.push(original.clone());
@@ -33,6 +41,50 @@ impl App {
             Err(error) => format!("导入失败：{error}"),
         };
         self.show_import = true;
+    }
+
+    pub(super) fn poll_shell_open(&mut self, ctx: &egui::Context) {
+        let ready = !self.show_save
+            && !self.show_import
+            && self.close_tab_id.is_none()
+            && self.rename_target.is_none()
+            && self.delete_target.is_none()
+            && self.collection_auth_draft.is_none();
+        let request = if ready {
+            crate::shell_open::poll(ctx)
+        } else {
+            crate::shell_open::poll_when(ctx, false)
+        };
+        match request {
+            Ok(Some(paths)) if !paths.is_empty() => self
+                .open_shell_paths_using(&paths, || linkshop::postman::backup_profile().map(|_| ())),
+            Err(error) => {
+                self.import_message = format!("读取文件打开请求失败：{error}");
+                self.show_import = true;
+            }
+            _ => {}
+        }
+    }
+
+    fn open_shell_paths_using(
+        &mut self,
+        paths: &[PathBuf],
+        backup: impl FnOnce() -> Result<(), String>,
+    ) {
+        if let Some(path) = paths.iter().find(|path| {
+            !path.is_file()
+                || !path
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+        }) {
+            self.import_message = format!(
+                "无法导入 {}：请选择已有的 Postman JSON 文件",
+                path.display()
+            );
+            self.show_import = true;
+            return;
+        }
+        self.import_files_using(paths, backup);
     }
 
     pub(super) fn dialogs(&mut self, ctx: &egui::Context) {
@@ -309,3 +361,6 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod file_open_tests;

@@ -6,6 +6,9 @@ mod collections;
 
 mod authentication;
 
+#[cfg(target_os = "windows")]
+mod title_bar;
+
 use super::*;
 
 fn fixture_requests() -> Vec<SavedRequest> {

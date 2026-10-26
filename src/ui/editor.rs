@@ -11,6 +11,8 @@ impl App {
             .response
             .rect;
         self.dialogs(ctx);
+        #[cfg(target_os = "windows")]
+        window_chrome::paint_border(ctx);
         rect
     }
 

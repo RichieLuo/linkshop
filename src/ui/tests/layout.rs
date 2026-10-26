@@ -29,8 +29,19 @@ fn workspace_renders_at_small_and_large_sizes_without_id_clashes_or_panel_overfl
                         panel = app.render(ctx);
                     },
                 );
-                assert!((panel.top() - 48.).abs() < 1., "header overflow: {panel:?}");
-                assert!(panel.height() >= size.y - 74., "panel overflow: {panel:?}");
+                let header_height = if cfg!(target_os = "windows") {
+                    34.
+                } else {
+                    48.
+                };
+                assert!(
+                    (panel.top() - header_height).abs() < 1.,
+                    "header overflow: {panel:?}"
+                );
+                assert!(
+                    panel.height() >= size.y - header_height - 26.,
+                    "panel overflow: {panel:?}"
+                );
                 assert!(
                     panel.right() <= size.x + 1.,
                     "horizontal overflow: {panel:?}"
@@ -70,7 +81,7 @@ fn column_and_panel_dividers_respond_to_pointer_drags() {
     let panel = frame(&mut app, vec![]);
     let column = pos2(
         panel.left() + 16. + 44. + (panel.width() - 32. - 44.) * 0.34,
-        48. + 40. + 48. + 54. + 38. + 34. + 16.,
+        panel.top() + 40. + 48. + 54. + 38. + 34. + 16.,
     );
     let press = |pos, pressed| egui::Event::PointerButton {
         pos,
@@ -88,7 +99,10 @@ fn column_and_panel_dividers_respond_to_pointer_drags() {
         "column divider did not move"
     );
     let initial = app.editor_height;
-    let split = pos2(panel.center().x, 48. + 40. + 48. + 54. + 38. + initial + 3.);
+    let split = pos2(
+        panel.center().x,
+        panel.top() + 40. + 48. + 54. + 38. + initial + 3.,
+    );
     frame(&mut app, vec![egui::Event::PointerMoved(split)]);
     frame(&mut app, vec![press(split, true)]);
     let moved = split - vec2(0., 40.);

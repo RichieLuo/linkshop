@@ -1,7 +1,12 @@
 use eframe::egui::{self, IconData, TextureHandle};
+#[cfg(not(target_os = "windows"))]
 use image::{ImageFormat, RgbaImage};
 
+#[cfg(not(target_os = "windows"))]
 const FOX: &[u8] = include_bytes!("../assets/branding/linkshop-fox.png");
+
+#[path = "branding_icon.rs"]
+mod branding_icon;
 
 /// Interface colors derived from the fox's blue fur, cyan highlights and navy outlines.
 pub mod palette {
@@ -25,6 +30,7 @@ pub mod palette {
     pub const DANGER: Color32 = Color32::from_rgb(177, 54, 57);
 }
 
+#[cfg(not(target_os = "windows"))]
 fn fox_image() -> RgbaImage {
     image::load_from_memory_with_format(FOX, ImageFormat::Png)
         .expect("the embedded LinkShop fox avatar must be a valid PNG")
@@ -33,7 +39,7 @@ fn fox_image() -> RgbaImage {
 
 pub fn icon_data() -> IconData {
     let image = image::imageops::resize(
-        &fox_image(),
+        &branding_icon::icon_image(),
         256,
         256,
         image::imageops::FilterType::Lanczos3,
@@ -45,6 +51,7 @@ pub fn icon_data() -> IconData {
     }
 }
 
+#[cfg(not(target_os = "windows"))]
 pub fn texture(ctx: &egui::Context) -> TextureHandle {
     let image = fox_image();
     let color_image = egui::ColorImage::from_rgba_unmultiplied(
@@ -52,4 +59,14 @@ pub fn texture(ctx: &egui::Context) -> TextureHandle {
         image.as_raw(),
     );
     ctx.load_texture("linkshop-fox", color_image, egui::TextureOptions::LINEAR)
+}
+
+#[cfg(target_os = "windows")]
+pub fn title_texture(ctx: &egui::Context) -> TextureHandle {
+    let icon = icon_data();
+    let image = egui::ColorImage::from_rgba_unmultiplied(
+        [icon.width as usize, icon.height as usize],
+        &icon.rgba,
+    );
+    ctx.load_texture("linkshop-title-icon", image, egui::TextureOptions::LINEAR)
 }

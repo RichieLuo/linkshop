@@ -3,6 +3,8 @@
 
 #[path = "../src/branding.rs"]
 mod branding;
+#[path = "../src/shell_open.rs"]
+mod shell_open;
 #[path = "../src/ui/mod.rs"]
 mod ui;
 
@@ -43,12 +45,19 @@ impl App for Preview {
             .unwrap();
             image.save(&self.output).unwrap();
             let scale = ctx.pixels_per_point();
+            let title_height = if cfg!(target_os = "windows") {
+                34.
+            } else {
+                48.
+            };
             let sidebar = image::imageops::crop_imm(
                 &image,
                 0,
-                (48. * scale) as u32,
+                (title_height * scale) as u32,
                 (350. * scale) as u32,
-                image.height().saturating_sub((72. * scale) as u32),
+                image
+                    .height()
+                    .saturating_sub(((title_height + 24.) * scale) as u32),
             )
             .to_image();
             sidebar
