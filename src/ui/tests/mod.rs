@@ -2,7 +2,9 @@ mod layout;
 
 mod tabs;
 
+mod collection_drag;
 mod collections;
+mod folders;
 
 mod authentication;
 

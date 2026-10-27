@@ -52,6 +52,7 @@ pub fn load(paths: &[PathBuf]) -> Result<Bundle, String> {
         result.requests.append(&mut next.requests);
         result.environments.append(&mut next.environments);
         result.collection_auth.append(&mut next.collection_auth);
+        result.folders.append(&mut next.folders);
         result.globals = merge_variables(&[&result.globals, &next.globals]);
         result.originals.append(&mut next.originals);
         result.collections += next.collections;
@@ -64,6 +65,7 @@ pub fn merge(
     environments: &mut Vec<Environment>,
     globals: &mut Vec<Pair>,
     collection_auth: &mut Vec<CollectionAuth>,
+    folders: &mut Vec<CollectionFolder>,
     bundle: Bundle,
 ) -> ImportReport {
     let mut report = ImportReport {
@@ -103,9 +105,16 @@ pub fn merge(
     for entry in bundle.collection_auth {
         if !collection_auth
             .iter()
-            .any(|old| old.collection_id == entry.collection_id)
+            .any(|old| old.collection_id == entry.collection_id && old.path == entry.path)
         {
             collection_auth.push(entry);
+        }
+    }
+    for folder in bundle.folders {
+        if !folders.iter().any(|old| {
+            old.collection_id == folder.collection_id && old.path.get(1..) == folder.path.get(1..)
+        }) {
+            folders.push(folder);
         }
     }
     *globals = merge_variables(&[globals, &bundle.globals]);
@@ -169,6 +178,7 @@ pub(super) fn import_profile_in(paths: &[PathBuf], dir: &Path) -> Result<ImportR
     let mut environments = stored(&state, "environments_v1")?;
     let mut globals = stored(&state, "globals_v1")?;
     let mut collection_auth = stored(&state, "collection_auth_v1")?;
+    let mut folders = stored(&state, "collection_folders_v1")?;
     let originals_key = if state.contains_key(ORIGINALS_KEY) {
         ORIGINALS_KEY
     } else {
@@ -181,6 +191,7 @@ pub(super) fn import_profile_in(paths: &[PathBuf], dir: &Path) -> Result<ImportR
         &mut environments,
         &mut globals,
         &mut collection_auth,
+        &mut folders,
         bundle,
     );
     let mut original_set: HashSet<_> = originals.iter().cloned().collect();
@@ -194,6 +205,7 @@ pub(super) fn import_profile_in(paths: &[PathBuf], dir: &Path) -> Result<ImportR
         ("environments_v1", ron::to_string(&environments)),
         ("globals_v1", ron::to_string(&globals)),
         ("collection_auth_v1", ron::to_string(&collection_auth)),
+        ("collection_folders_v1", ron::to_string(&folders)),
         (ORIGINALS_KEY, ron::to_string(&originals)),
     ] {
         state.insert(key.into(), value.map_err(|e| e.to_string())?);

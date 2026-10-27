@@ -10,7 +10,7 @@ fn open_requests_send_current_collection_auth_and_keep_request_overrides() {
     let worker = thread::spawn(move || {
         let deadline = Instant::now() + Duration::from_secs(15);
         let mut requests = vec![];
-        while requests.len() < 6 {
+        while requests.len() < 8 {
             let mut socket = match listener.accept() {
                 Ok((socket, _)) => socket,
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
@@ -49,6 +49,7 @@ fn open_requests_send_current_collection_auth_and_keep_request_overrides() {
     app.collection_auth = vec![
         CollectionAuth {
             collection_id: "c1".into(),
+            path: vec![],
             auth: Auth {
                 kind: "Bearer Token".into(),
                 token: "{{token}}".into(),
@@ -57,6 +58,7 @@ fn open_requests_send_current_collection_auth_and_keep_request_overrides() {
         },
         CollectionAuth {
             collection_id: "c2".into(),
+            path: vec![],
             auth: Auth {
                 kind: "Bearer Token".into(),
                 token: "other-collection".into(),
@@ -91,6 +93,20 @@ fn open_requests_send_current_collection_auth_and_keep_request_overrides() {
     assert_eq!(app.tabs[first_tab].request.auth.kind, "Inherit");
     assert!(!app.tabs[first_tab].dirty());
     assert_eq!(app.history[0].request.auth.kind, "Inherit");
+    let folder = FolderTarget::parent(&app.tabs[first_tab].request);
+    app.begin_collection_auth(folder.clone());
+    app.collection_auth_draft.as_mut().unwrap().auth = Auth {
+        kind: "Bearer Token".into(),
+        token: "folder-token".into(),
+        ..Default::default()
+    };
+    app.save_collection_auth();
+    send(&mut app);
+    app.begin_collection_auth(folder);
+    app.collection_auth_draft.as_mut().unwrap().auth.token = "folder-refreshed".into();
+    app.save_collection_auth();
+    send(&mut app);
+    assert!(!app.tabs[first_tab].dirty());
     app.open_request(app.saved[2].request.clone());
     send(&mut app);
     app.active = first_tab;
@@ -108,6 +124,8 @@ fn open_requests_send_current_collection_auth_and_keep_request_overrides() {
         "environment-one",
         "environment-two",
         "fresh-token",
+        "folder-token",
+        "folder-refreshed",
         "other-collection",
     ]) {
         assert!(
@@ -115,8 +133,8 @@ fn open_requests_send_current_collection_auth_and_keep_request_overrides() {
             "{wire}"
         );
     }
-    assert!(wires[4].contains("authorization: basic dxnlcjpwyxnz\r\n"));
-    assert!(!wires[5].contains("authorization:"));
+    assert!(wires[6].contains("authorization: basic dxnlcjpwyxnz\r\n"));
+    assert!(!wires[7].contains("authorization:"));
 }
 
 #[test]

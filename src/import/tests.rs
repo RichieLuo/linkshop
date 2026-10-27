@@ -29,7 +29,7 @@ fn headless_import_preserves_existing_state_backs_up_and_reimports_without_dupli
     let original = ron::to_string(&original).unwrap();
     std::fs::write(dir.join("app.ron"), &original).unwrap();
     let input = dir.join("input.json");
-    std::fs::write(&input, json!({"collections":[{"info":{"name":"Collection",(concat!("_post", "man_id")):"c"},"item":[{"name":"GET","request":{"method":"GET","url":"https://example.com"}}]}],"environments":[{"id":"env","name":"Environment","values":[{"key":"token","value":"test"}]}]}).to_string()).unwrap();
+    std::fs::write(&input, json!({"collections":[{"info":{"name":"Collection",(concat!("_post", "man_id")):"c"},"item":[{"name":"GET","request":{"method":"GET","url":"https://example.com"}},{"name":"Empty","item":[]}]}],"environments":[{"id":"env","name":"Environment","values":[{"key":"token","value":"test"}]}]}).to_string()).unwrap();
     let first = import_profile_in(std::slice::from_ref(&input), &dir).unwrap();
     assert_eq!(
         (first.added, first.environments, first.incomplete),
@@ -66,6 +66,9 @@ fn headless_import_preserves_existing_state_backs_up_and_reimports_without_dupli
     let saved: Vec<SavedRequest> = ron::from_str(&state["saved"]).unwrap();
     let collection_auth: Vec<CollectionAuth> = ron::from_str(&state["collection_auth_v1"]).unwrap();
     let environments: Vec<Environment> = ron::from_str(&state["environments_v1"]).unwrap();
+    let folders: Vec<CollectionFolder> = ron::from_str(&state["collection_folders_v1"]).unwrap();
+    assert_eq!(folders.len(), 2);
+    assert_eq!(folders[1].path, ["Collection", "Empty"]);
     assert_eq!(saved.len(), 2);
     assert_eq!(collection_auth[0].collection_id, "c");
     assert_eq!(saved[1].request.auth, Auth::inherit());
@@ -98,6 +101,27 @@ fn v21_preserves_hierarchy_disabled_rows_inherited_auth_and_scripts() {
     assert!(!src.warnings.is_empty());
     assert_eq!(req.variables[0].key, "base");
 }
+
+#[test]
+fn empty_collections_and_nested_empty_folders_survive_both_import_formats() {
+    for doc in [
+        json!({"info":{"name":"Empty"},"item":[{"name":"Parent","item":[{"name":"Child","item":[]}]}]}),
+        json!({"id":"empty","name":"Empty","requests":[],"folders":[{"name":"Parent","requests":[],"folders":[{"name":"Child","requests":[]}]}]}),
+    ] {
+        let bundle = parse(&doc).unwrap();
+        assert_eq!(bundle.collections, 1);
+        assert!(bundle.requests.is_empty());
+        assert_eq!(bundle.folders.len(), 3);
+        assert_eq!(bundle.folders[2].path, ["Empty", "Parent", "Child"]);
+        assert_eq!(bundle.collection_auth[2].path, ["Parent", "Child"]);
+        assert_eq!(bundle.collection_auth[2].auth, Auth::inherit());
+        let encoded = ron::to_string(&bundle.folders).unwrap();
+        assert_eq!(
+            ron::from_str::<Vec<CollectionFolder>>(&encoded).unwrap(),
+            bundle.folders
+        );
+    }
+}
 #[test]
 fn import_is_idempotent_and_full_records_upgrade_metadata() {
     let partial = json!({"id":"c1","name":"C","folders":[],"order":["r1"],"requests":[{"id":"r1","name":"R","method":"GET","url":"https://example.com"}]});
@@ -106,12 +130,14 @@ fn import_is_idempotent_and_full_records_upgrade_metadata() {
     let mut env = vec![];
     let mut globals = vec![];
     let mut collection_auth = vec![];
+    let mut folders = vec![];
     assert_eq!(
         merge(
             &mut saved,
             &mut env,
             &mut globals,
             &mut collection_auth,
+            &mut folders,
             parse(&partial).unwrap()
         )
         .incomplete,
@@ -123,6 +149,7 @@ fn import_is_idempotent_and_full_records_upgrade_metadata() {
             &mut env,
             &mut globals,
             &mut collection_auth,
+            &mut folders,
             parse(&full).unwrap()
         )
         .upgraded,
@@ -134,6 +161,7 @@ fn import_is_idempotent_and_full_records_upgrade_metadata() {
             &mut env,
             &mut globals,
             &mut collection_auth,
+            &mut folders,
             parse(&full).unwrap()
         )
         .skipped,
@@ -182,14 +210,18 @@ fn imports_live_collection_auth_with_folder_overrides_and_preserves_local_update
         ]
     });
     let bundle = parse(&doc).unwrap();
-    assert_eq!(bundle.collection_auth.len(), 2);
+    assert_eq!(bundle.collection_auth.len(), 4);
     assert_eq!(bundle.requests[0].request.auth, Auth::inherit());
     assert_eq!(
         effective_auth(&bundle.requests[0].request, &bundle.collection_auth).token,
         "root-token"
     );
     assert_eq!(bundle.requests[1].request.auth.kind, "No Auth");
-    assert_eq!(bundle.requests[2].request.auth.kind, "Basic Auth");
+    assert_eq!(bundle.requests[2].request.auth.kind, "Inherit");
+    assert_eq!(
+        effective_auth(&bundle.requests[2].request, &bundle.collection_auth).kind,
+        "Basic Auth"
+    );
     let native = bundle
         .requests
         .iter()
@@ -204,23 +236,37 @@ fn imports_live_collection_auth_with_folder_overrides_and_preserves_local_update
     let mut environments = vec![];
     let mut globals = vec![];
     let mut collection_auth = vec![];
+    let mut folders = vec![];
     merge(
         &mut saved,
         &mut environments,
         &mut globals,
         &mut collection_auth,
+        &mut folders,
         bundle,
     );
     collection_auth[0].auth.token = "locally-refreshed".into();
+    collection_auth
+        .iter_mut()
+        .find(|entry| entry.collection_id == "c1" && entry.path == ["Folder"])
+        .unwrap()
+        .auth
+        .username = "local-user".into();
     let report = merge(
         &mut saved,
         &mut environments,
         &mut globals,
         &mut collection_auth,
+        &mut folders,
         parse(&doc).unwrap(),
     );
     assert_eq!(report.skipped, 5);
-    assert_eq!(collection_auth.len(), 2);
+    assert_eq!(collection_auth.len(), 4);
+    assert_eq!(folders.len(), 4);
+    assert_eq!(
+        effective_auth(&saved[2].request, &collection_auth).username,
+        "local-user"
+    );
     assert_eq!(
         effective_auth(&saved[0].request, &collection_auth).token,
         "locally-refreshed"

@@ -73,16 +73,39 @@ impl Auth {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CollectionAuth {
     pub collection_id: String,
+    /// Folder segments below the collection root; empty for collection auth.
+    #[serde(default)]
+    pub path: Vec<String>,
     pub auth: Auth,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CollectionFolder {
+    pub collection_id: String,
+    /// Full display path, including the collection name.
+    pub path: Vec<String>,
+}
+
+pub fn inherited_auth<'a>(
+    request: &Request,
+    collections: &'a [CollectionAuth],
+) -> Option<&'a CollectionAuth> {
+    let path = request.folder_path();
+    collections
+        .iter()
+        .filter(|entry| {
+            entry.collection_id == request.collection_id()
+                && path.starts_with(&entry.path)
+                && entry.auth.kind != "Inherit"
+        })
+        .max_by_key(|entry| entry.path.len())
 }
 
 pub fn effective_auth(request: &Request, collections: &[CollectionAuth]) -> Auth {
     if request.auth.kind != "Inherit" {
         return request.auth.clone();
     }
-    collections
-        .iter()
-        .find(|entry| entry.collection_id == request.collection_id())
+    inherited_auth(request, collections)
         .map(|entry| entry.auth.clone())
         .unwrap_or_default()
 }
@@ -144,6 +167,13 @@ impl Default for Request {
 }
 
 impl Request {
+    pub fn folder_path(&self) -> &[String] {
+        self.source
+            .as_ref()
+            .and_then(|source| source.path.get(1..))
+            .unwrap_or_default()
+    }
+
     pub fn collection_id(&self) -> &str {
         self.source
             .as_ref()
@@ -534,6 +564,31 @@ mod tests {
         assert_eq!(req.params[0].key, "q");
         assert_eq!(req.auth, Auth::default());
         assert!(req.headers.last().unwrap().is_empty());
+    }
+
+    #[test]
+    fn legacy_collection_auth_without_folder_path_still_applies_to_descendants() {
+        let auth = Auth {
+            kind: "Bearer Token".into(),
+            token: "legacy".into(),
+            ..Default::default()
+        };
+        let legacy = format!(
+            "(collection_id:\"c1\",auth:{})",
+            ron::to_string(&auth).unwrap()
+        );
+        let entry: CollectionAuth = ron::from_str(&legacy).unwrap();
+        assert!(entry.path.is_empty());
+        let request = Request {
+            auth: Auth::inherit(),
+            source: Some(ImportSource {
+                collection_id: "c1".into(),
+                path: vec!["Root".into(), "Folder".into()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(effective_auth(&request, &[entry]), auth);
     }
 
     #[test]

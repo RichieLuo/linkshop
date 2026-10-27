@@ -425,13 +425,20 @@ impl App {
                             tab.sync_auth_tables();
                         }
                         let collection = FolderTarget::collection(&tab.request);
+                        let parent = FolderTarget::parent(&tab.request);
                         ui.add_space(12.);
                         if tab.request.auth.kind == "Inherit" {
                             let auth = effective_auth(&tab.request, &self.collection_auth);
                             ui.label(
                                 RichText::new(format!(
-                                    "当前集合：{} · {}",
-                                    collection.path[0],
+                                    "继承自：{} · {}",
+                                    inherited_auth(&tab.request, &self.collection_auth)
+                                        .map(|entry| {
+                                            let mut path = collection.path.clone();
+                                            path.extend_from_slice(&entry.path);
+                                            path.join(" / ")
+                                        })
+                                        .unwrap_or_else(|| collection.path[0].clone()),
                                     if auth.kind.is_empty() {
                                         "No Auth"
                                     } else {
@@ -440,6 +447,10 @@ impl App {
                                 ))
                                 .color(MUTED),
                             );
+                        }
+                        if parent.key.len() > 1 && ui.link("编辑文件夹身份验证").clicked()
+                        {
+                            edit_collection_auth = Some(parent);
                         }
                         if ui.link("编辑集合身份验证").clicked() {
                             edit_collection_auth = Some(collection);

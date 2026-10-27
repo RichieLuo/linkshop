@@ -1,4 +1,6 @@
 mod actions;
+mod collection_drag;
+mod dialog_style;
 
 use linkshop::model::*;
 use widgets::*;
@@ -55,6 +57,20 @@ struct FolderTarget {
 }
 
 impl FolderTarget {
+    fn local() -> Self {
+        Self {
+            key: vec!["local-saved".into()],
+            path: vec!["已保存的请求".into()],
+        }
+    }
+
+    fn parent(request: &Request) -> Self {
+        let mut target = Self::collection(request);
+        target.key.extend_from_slice(request.folder_path());
+        target.path.extend_from_slice(request.folder_path());
+        target
+    }
+
     fn collection(request: &Request) -> Self {
         Self {
             key: vec![request.collection_id().into()],
@@ -70,17 +86,7 @@ impl FolderTarget {
     }
 
     fn contains(&self, request: &Request) -> bool {
-        if self.key[0] == "local-saved" {
-            return request.source.as_ref().is_none_or(|s| s.path.is_empty());
-        }
-        request.source.as_ref().is_some_and(|source| {
-            source.collection_id == self.key[0]
-                && source
-                    .path
-                    .get(1..)
-                    .unwrap_or_default()
-                    .starts_with(&self.key[1..])
-        })
+        request.collection_id() == self.key[0] && request.folder_path().starts_with(&self.key[1..])
     }
 }
 
@@ -110,7 +116,9 @@ enum SidebarAction {
     Open(Box<Request>),
     OpenNew(Box<Request>),
     Duplicate(Box<Request>),
+    MoveRequest(Box<Request>, FolderTarget),
     NewRequest(FolderTarget),
+    NewFolder(FolderTarget),
     OpenAll(FolderTarget),
     Auth(FolderTarget),
     Rename(CollectionTarget),
@@ -121,6 +129,12 @@ struct CollectionAuthDraft {
     target: FolderTarget,
     auth: Auth,
     apply_to_existing: bool,
+}
+
+struct NewFolderDraft {
+    parent: FolderTarget,
+    name: String,
+    error: String,
 }
 
 enum TabAction {
@@ -190,6 +204,8 @@ pub struct App {
     delete_target: Option<CollectionTarget>,
     collection_auth: Vec<CollectionAuth>,
     collection_auth_draft: Option<CollectionAuthDraft>,
+    folders: Vec<CollectionFolder>,
+    new_folder_draft: Option<NewFolderDraft>,
     editor_height: f32,
     notice: Option<(String, Instant)>,
     environments: Vec<Environment>,
@@ -235,6 +251,7 @@ impl App {
                 eframe::get_value(storage, "selected_environment_v1").unwrap_or_default();
             app.collection_auth =
                 eframe::get_value(storage, "collection_auth_v1").unwrap_or_default();
+            app.folders = eframe::get_value(storage, "collection_folders_v1").unwrap_or_default();
         }
         app
     }
@@ -292,6 +309,8 @@ impl App {
             delete_target: None,
             collection_auth: vec![],
             collection_auth_draft: None,
+            folders: vec![],
+            new_folder_draft: None,
             editor_height: 240.,
             notice: None,
             environments: vec![],
@@ -351,6 +370,7 @@ impl eframe::App for App {
         eframe::set_value(storage, "environments_v1", &self.environments);
         eframe::set_value(storage, "globals_v1", &self.globals);
         eframe::set_value(storage, "collection_auth_v1", &self.collection_auth);
+        eframe::set_value(storage, "collection_folders_v1", &self.folders);
         eframe::set_value(
             storage,
             linkshop::import::ORIGINALS_KEY,
@@ -402,6 +422,7 @@ impl eframe::App for App {
             && self.rename_target.is_none()
             && self.delete_target.is_none()
             && self.collection_auth_draft.is_none()
+            && self.new_folder_draft.is_none()
         {
             let shortcuts = ctx.input_mut(|i| {
                 (
@@ -486,7 +507,7 @@ impl RequestFolder {
                     .unwrap_or_default()
                     .starts_with(&self.key[1..])
         });
-        let expanded = searching
+        let mut expanded = searching
             || ui
                 .ctx()
                 .data_mut(|data| data.get_persisted::<bool>(self.expansion_id()))
@@ -499,6 +520,15 @@ impl RequestFolder {
         if hit.hovered() {
             ui.painter().rect_filled(r.shrink2(vec2(4., 1.)), 4., HOVER);
         }
+        expanded |= collection_drag::folder_drop_target(
+            ui,
+            &hit,
+            &FolderTarget {
+                key: self.key.clone(),
+                path: self.path.clone(),
+            },
+            action,
+        );
         let inset = (depth as f32 * 16.).min((r.width() - 104.).max(0.));
         let x = r.left() + 14. + inset;
         icon(
@@ -541,10 +571,20 @@ impl RequestFolder {
             if menu_item(ui, "添加请求") {
                 *action = Some(SidebarAction::NewRequest(target.clone()));
             }
+            if menu_item(ui, "添加文件夹") {
+                *action = Some(SidebarAction::NewFolder(target.clone()));
+            }
             if menu_item(ui, "打开全部请求") {
                 *action = Some(SidebarAction::OpenAll(target.clone()));
             }
-            if depth == 0 && menu_item(ui, "集合身份验证") {
+            if menu_item(
+                ui,
+                if depth == 0 {
+                    "集合身份验证"
+                } else {
+                    "文件夹身份验证"
+                },
+            ) {
                 *action = Some(SidebarAction::Auth(target.clone()));
             }
             if menu_item(ui, "展开全部") {
@@ -554,7 +594,7 @@ impl RequestFolder {
                 self.set_expanded(ui.ctx(), false);
             }
             ui.separator();
-            if self.key[0] != "local-saved" && menu_item(ui, "重命名") {
+            if (depth > 0 || self.key[0] != "local-saved") && menu_item(ui, "重命名") {
                 *action = Some(SidebarAction::Rename(CollectionTarget::Folder(
                     target.clone(),
                 )));
@@ -579,6 +619,7 @@ impl RequestFolder {
                 ui.spacing_mut().item_spacing = Vec2::ZERO;
                 for (i, (name, request)) in self.requests.iter().enumerate() {
                     let hit = request_row_at_depth(ui, i, name, request, active, depth + 1);
+                    collection_drag::request_drag_source(&hit, request);
                     request_context_menu(&hit, request, true, action);
                     if hit.clicked() {
                         *action = Some(SidebarAction::Open(Box::new(request.clone())));
@@ -589,15 +630,28 @@ impl RequestFolder {
     }
 }
 
-fn request_folders(entries: &[(String, Request)]) -> Vec<RequestFolder> {
+fn request_folders(
+    entries: &[(String, Request)],
+    folders: &[CollectionFolder],
+) -> Vec<RequestFolder> {
     let mut roots: Vec<RequestFolder> = vec![];
-    for (name, request) in entries {
-        let (path, root_key) = request
-            .source
-            .as_ref()
-            .filter(|source| !source.path.is_empty())
-            .map(|source| (source.path.clone(), source.collection_id.clone()))
-            .unwrap_or_else(|| (vec!["已保存的请求".into()], "local-saved".into()));
+    let paths = entries
+        .iter()
+        .map(|(name, request)| {
+            let (path, root_key) = request
+                .source
+                .as_ref()
+                .filter(|source| !source.path.is_empty())
+                .map(|source| (source.path.clone(), source.collection_id.clone()))
+                .unwrap_or_else(|| (vec!["已保存的请求".into()], "local-saved".into()));
+            (path, root_key, Some((name, request)))
+        })
+        .chain(
+            folders
+                .iter()
+                .map(|folder| (folder.path.clone(), folder.collection_id.clone(), None)),
+        );
+    for (path, root_key, request) in paths {
         let mut siblings = &mut roots;
         let mut key = vec![];
         for (depth, segment) in path.iter().enumerate() {
@@ -619,7 +673,9 @@ fn request_folders(entries: &[(String, Request)]) -> Vec<RequestFolder> {
                     siblings.len() - 1
                 });
             let folder = &mut siblings[index];
-            if depth + 1 == path.len() {
+            if depth + 1 == path.len()
+                && let Some((name, request)) = request
+            {
                 folder.requests.push((name.clone(), request.clone()));
             }
             siblings = &mut folder.children;
@@ -699,7 +755,15 @@ fn request_row_at_depth(
 ) -> egui::Response {
     let r = row(ui, 28.);
     let hit = ui
-        .interact(r, ui.id().with(("request", index)), Sense::click())
+        .interact(
+            r,
+            ui.id().with(("request", index)),
+            if depth > 0 {
+                Sense::click_and_drag()
+            } else {
+                Sense::click()
+            },
+        )
         .on_hover_text(format!("{} {}", request.method, request.url))
         .on_hover_cursor(egui::CursorIcon::PointingHand);
     let selected = same_saved_request(request, active);
@@ -811,7 +875,7 @@ fn auth_editor(ui: &mut egui::Ui, auth: &mut Auth, allow_inherit: bool) {
     ui.add_space(8.);
     egui::ComboBox::from_id_salt("auth_type")
         .selected_text(if auth.kind == "Inherit" {
-            "继承集合身份验证"
+            "继承上级身份验证"
         } else if auth.kind.is_empty() {
             "No Auth"
         } else {
@@ -820,7 +884,7 @@ fn auth_editor(ui: &mut egui::Ui, auth: &mut Auth, allow_inherit: bool) {
         .width(220.)
         .show_ui(ui, |ui| {
             if allow_inherit {
-                ui.selectable_value(&mut auth.kind, "Inherit".into(), "继承集合身份验证");
+                ui.selectable_value(&mut auth.kind, "Inherit".into(), "继承上级身份验证");
             }
             for kind in ["No Auth", "Bearer Token", "Basic Auth", "API Key"] {
                 ui.selectable_value(&mut auth.kind, kind.into(), kind);
@@ -830,7 +894,7 @@ fn auth_editor(ui: &mut egui::Ui, auth: &mut Auth, allow_inherit: bool) {
     match auth.kind.as_str() {
         "Inherit" => {
             ui.label(
-                RichText::new("发送时使用集合的最新身份验证，更新 token 只需修改集合配置。")
+                RichText::new("发送时使用最近的上级文件夹或集合身份验证，配置更新后立即生效。")
                     .color(MUTED),
             );
         }

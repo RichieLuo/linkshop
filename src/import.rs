@@ -25,6 +25,7 @@ pub struct Bundle {
     pub environments: Vec<Environment>,
     pub globals: Vec<Pair>,
     pub collection_auth: Vec<CollectionAuth>,
+    pub folders: Vec<CollectionFolder>,
     pub originals: Vec<String>,
     pub collections: usize,
 }
@@ -297,7 +298,6 @@ fn walk_v2(
     items: &[Value],
     path: &[String],
     collection_id: &str,
-    parent_auth: &Auth,
     parent_vars: &[Pair],
     scripts: bool,
     result: &mut Bundle,
@@ -307,20 +307,13 @@ fn walk_v2(
     }
     for item in items {
         let vars = merge_variables(&[parent_vars, &pairs(&item["variable"])]);
-        let auth = auth(&item["auth"], parent_auth);
+        let auth = auth(&item["auth"], &Auth::inherit());
         let scripts = scripts || item["event"].as_array().is_some_and(|a| !a.is_empty());
         if let Some(children) = item["item"].as_array() {
             let mut path = path.to_vec();
             path.push(item["name"].as_str().unwrap_or("未命名文件夹").into());
-            walk_v2(
-                children,
-                &path,
-                collection_id,
-                &auth,
-                &vars,
-                scripts,
-                result,
-            )?;
+            store_folder(&path, collection_id, auth, result);
+            walk_v2(children, &path, collection_id, &vars, scripts, result)?;
         } else if item.get("request").is_some() {
             result.requests.push(parse_request(
                 item,
@@ -353,7 +346,6 @@ fn walk_native(
     node: &Value,
     path: &[String],
     collection_id: &str,
-    inherited: &Auth,
     variables: &[Pair],
     result: &mut Bundle,
     depth: usize,
@@ -361,12 +353,19 @@ fn walk_native(
     if depth > 64 {
         return Err("集合文件夹嵌套超过 64 层".into());
     }
-    // Root auth is stored once; nested folders may still override it.
-    let inherited = if depth == 0 {
-        Auth::inherit()
-    } else {
-        auth(&node["auth"], inherited)
-    };
+    store_folder(
+        path,
+        collection_id,
+        auth(
+            &node["auth"],
+            &if depth == 0 {
+                Auth::default()
+            } else {
+                Auth::inherit()
+            },
+        ),
+        result,
+    );
     let variables = merge_variables(&[variables, &pairs(&node["variables"])]);
     for folder in ordered(
         node["folders"].as_array().map(Vec::as_slice).unwrap_or(&[]),
@@ -374,15 +373,7 @@ fn walk_native(
     ) {
         let mut next = path.to_vec();
         next.push(folder["name"].as_str().unwrap_or("未命名文件夹").into());
-        walk_native(
-            folder,
-            &next,
-            collection_id,
-            &inherited,
-            &variables,
-            result,
-            depth + 1,
-        )?;
+        walk_native(folder, &next, collection_id, &variables, result, depth + 1)?;
     }
     for request in ordered(
         node["requests"]
@@ -395,13 +386,25 @@ fn walk_native(
             request,
             path,
             collection_id,
-            &inherited,
+            &Auth::inherit(),
             &variables,
             false,
             true,
         ));
     }
     Ok(())
+}
+
+fn store_folder(path: &[String], collection_id: &str, auth: Auth, result: &mut Bundle) {
+    result.folders.push(CollectionFolder {
+        collection_id: collection_id.into(),
+        path: path.to_vec(),
+    });
+    result.collection_auth.push(CollectionAuth {
+        collection_id: collection_id.into(),
+        path: path[1..].to_vec(),
+        auth,
+    });
 }
 
 pub fn parse(value: &Value) -> Result<Bundle, String> {
@@ -412,6 +415,7 @@ pub fn parse(value: &Value) -> Result<Bundle, String> {
             result.requests.append(&mut next.requests);
             result.environments.append(&mut next.environments);
             result.collection_auth.append(&mut next.collection_auth);
+            result.folders.append(&mut next.folders);
             result.collections += next.collections;
         }
         for env in value["environments"].as_array().into_iter().flatten() {
@@ -431,15 +435,16 @@ pub fn parse(value: &Value) -> Result<Bundle, String> {
             .as_str()
             .map(canonical_id)
             .unwrap_or_else(|| stable_id(&[&name]));
-        result.collection_auth.push(CollectionAuth {
-            collection_id: id.clone(),
-            auth: auth(&value["auth"], &Auth::default()),
-        });
+        store_folder(
+            std::slice::from_ref(&name),
+            &id,
+            auth(&value["auth"], &Auth::default()),
+            &mut result,
+        );
         walk_v2(
             items,
             &[name],
             &id,
-            &Auth::inherit(),
             &pairs(&value["variable"]),
             value["event"].as_array().is_some_and(|a| !a.is_empty()),
             &mut result,
@@ -448,11 +453,7 @@ pub fn parse(value: &Value) -> Result<Bundle, String> {
     } else if value["requests"].is_array() && value["name"].is_string() {
         let name = text(&value["name"]);
         let id = canonical_id(&text(&value["id"]));
-        result.collection_auth.push(CollectionAuth {
-            collection_id: id.clone(),
-            auth: auth(&value["auth"], &Auth::default()),
-        });
-        walk_native(value, &[name], &id, &Auth::default(), &[], &mut result, 0)?;
+        walk_native(value, &[name], &id, &[], &mut result, 0)?;
         result.collections = 1;
     } else if value["values"].is_array() {
         if value[VARIABLE_SCOPE_KEY] == "globals" {

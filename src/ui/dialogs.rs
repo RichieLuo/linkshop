@@ -22,6 +22,7 @@ impl App {
                 &mut self.environments,
                 &mut self.globals,
                 &mut self.collection_auth,
+                &mut self.folders,
                 bundle,
             ))
         });
@@ -49,7 +50,8 @@ impl App {
             && self.close_tab_id.is_none()
             && self.rename_target.is_none()
             && self.delete_target.is_none()
-            && self.collection_auth_draft.is_none();
+            && self.collection_auth_draft.is_none()
+            && self.new_folder_draft.is_none();
         let request = if ready {
             crate::shell_open::poll(ctx)
         } else {
@@ -88,6 +90,42 @@ impl App {
     }
 
     pub(super) fn dialogs(&mut self, ctx: &egui::Context) {
+        if let Some(draft) = &mut self.new_folder_draft {
+            let mut create = false;
+            let mut cancel = false;
+            let modal = dialog_style::modal(ctx, "new_folder_dialog").show(ctx, |ui| {
+                ui.set_width(440.);
+                dialog_style::title(ui, "添加文件夹");
+                ui.add_space(12.);
+                ui.label(
+                    RichText::new(format!("添加到：{}", draft.parent.path.join(" / ")))
+                        .color(MUTED),
+                );
+                ui.add_space(8.);
+                ui.add_sized(
+                    [ui.available_width(), 36.],
+                    egui::TextEdit::singleline(&mut draft.name).hint_text("文件夹名称"),
+                );
+                if !draft.error.is_empty() {
+                    ui.colored_label(DANGER, &draft.error);
+                }
+                ui.add_space(16.);
+                dialog_style::actions(ui, |ui| {
+                    create = ui
+                        .add_enabled(
+                            !draft.name.trim().is_empty(),
+                            dialog_style::primary("创建", ACCENT),
+                        )
+                        .clicked();
+                    cancel = ui.button("取消").clicked();
+                });
+            });
+            if create {
+                self.create_folder(ctx);
+            } else if cancel || modal.should_close() {
+                self.new_folder_draft = None;
+            }
+        }
         if let Some(draft) = &mut self.collection_auth_draft {
             let mut save = false;
             let mut cancel = false;
@@ -96,29 +134,28 @@ impl App {
                 .iter()
                 .filter(|saved| draft.target.contains(&saved.request))
                 .count();
-            let modal = egui::Modal::new(egui::Id::new("collection_auth_dialog")).show(ctx, |ui| {
+            let modal = dialog_style::modal(ctx, "collection_auth_dialog").show(ctx, |ui| {
                 ui.set_width(520.);
-                ui.heading("集合身份验证");
+                dialog_style::title(ui, if draft.target.key.len() == 1 { "集合身份验证" } else { "文件夹身份验证" });
                 ui.add_space(8.);
-                ui.label(RichText::new(&draft.target.path[0]).color(MUTED));
+                ui.label(RichText::new(draft.target.path.join(" / ")).color(MUTED));
                 egui::ScrollArea::vertical().max_height(360.).show(ui, |ui| {
-                    auth_editor(ui, &mut draft.auth, false);
+                    auth_editor(ui, &mut draft.auth, draft.target.key.len() > 1);
                     ui.add_space(16.);
-                    ui.label("保存后，继承此集合的请求将在发送时使用最新配置。支持 {{变量名}}。");
+                    ui.label("继承请求在发送时读取最近的上级文件夹或集合配置。支持 {{变量名}}。");
                     ui.add_space(10.);
                     ui.checkbox(&mut draft.apply_to_existing, format!(
-                        "将集合内已有的 {count} 条请求改为继承（含子文件夹）"
+                        "将此范围内已有的 {count} 条请求改为继承（含子文件夹）"
                     ));
                     if draft.apply_to_existing {
-                        ui.label(RichText::new("同时停用已有的 Authorization 和同名 API Key 请求头/参数。独立身份验证将被替换。").color(MUTED));
+                        ui.label(RichText::new("同时重置子文件夹的身份验证，并停用已有的 Authorization 和同名 API Key 请求头/参数。独立身份验证将被替换。").color(MUTED));
                     } else {
-                        ui.label(RichText::new("已有请求的独立身份验证保持原有配置；从集合添加的新请求默认继承。").color(MUTED));
+                        ui.label(RichText::new("已有请求及子文件夹的独立身份验证保持原有配置；新请求默认继承。").color(MUTED));
                     }
                 });
                 ui.add_space(18.);
-                ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                    save = ui.add(egui::Button::new(RichText::new("保存").color(WHITE))
-                        .fill(ACCENT).min_size(vec2(76., 32.))).clicked();
+                dialog_style::actions(ui, |ui| {
+                    save = ui.add(dialog_style::primary("保存", ACCENT)).clicked();
                     cancel = ui.button("取消").clicked();
                 });
             });
@@ -130,7 +167,8 @@ impl App {
         }
         if self.show_import {
             let mut visible = true;
-            egui::Window::new("导入数据")
+            egui::Window::new(RichText::new("导入数据").size(20.).strong())
+                .frame(dialog_style::frame(ctx))
                 .id(egui::Id::new("import_window"))
                 .open(&mut visible)
                 .resizable(false)
@@ -149,7 +187,7 @@ impl App {
                     if ui
                         .add_enabled(
                             !self.import_path.trim().is_empty(),
-                            egui::Button::new("导入"),
+                            dialog_style::primary("导入", ACCENT),
                         )
                         .clicked()
                     {
@@ -173,7 +211,8 @@ impl App {
         }
         if self.show_variables {
             let mut visible = true;
-            egui::Window::new("变量")
+            egui::Window::new(RichText::new("变量").size(20.).strong())
+                .frame(dialog_style::frame(ctx))
                 .id(egui::Id::new("variables_window"))
                 .open(&mut visible)
                 .default_size([740., 390.])
@@ -225,14 +264,14 @@ impl App {
             self.show_variables = visible;
         }
         if self.show_save {
-            egui::Modal::new(egui::Id::new("save_dialog")).show(ctx, |ui| {
-                ui.set_width(400.);
-                ui.heading("保存请求");
+            dialog_style::modal(ctx, "save_dialog").show(ctx, |ui| {
+                ui.set_width(440.);
+                dialog_style::title(ui, "保存请求");
                 ui.add_space(16.);
                 ui.label("请求名称");
                 ui.add_space(5.);
                 ui.add_sized(
-                    [400., 34.],
+                    [ui.available_width(), 36.],
                     egui::TextEdit::singleline(&mut self.save_name).hint_text("给请求起一个名称"),
                 );
                 ui.add_space(8.);
@@ -249,13 +288,11 @@ impl App {
                         .color(MUTED),
                 );
                 ui.add_space(18.);
-                ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                dialog_style::actions(ui, |ui| {
                     if ui
                         .add_enabled(
                             !self.save_name.trim().is_empty(),
-                            egui::Button::new(RichText::new("保存").color(WHITE))
-                                .fill(ACCENT)
-                                .min_size(vec2(76., 32.)),
+                            dialog_style::primary("保存", ACCENT),
                         )
                         .clicked()
                     {
@@ -276,59 +313,56 @@ impl App {
                 .find(|t| t.id == id)
                 .map(|t| t.request.name.clone())
                 .unwrap_or_default();
-            egui::Modal::new(egui::Id::new("close_dialog")).show(ctx, |ui| {
-                ui.set_width(400.);
-                ui.heading("保存更改？");
+            dialog_style::modal(ctx, "close_dialog").show(ctx, |ui| {
+                ui.set_width(440.);
+                dialog_style::title(ui, "保存更改？");
                 ui.add_space(12.);
                 ui.label(format!("“{name}”包含尚未保存的更改。"));
                 ui.add_space(20.);
-                ui.horizontal(|ui| {
-                    if ui.button("取消").clicked() {
+                dialog_style::actions(ui, |ui| {
+                    if ui.add(dialog_style::primary("保存", ACCENT)).clicked() {
                         self.close_tab_id = None;
-                        self.pending_close.clear();
+                        self.close_after_save = true;
+                        self.begin_save_tab(id);
                     }
                     if ui.button("不保存").clicked() {
                         self.close_tab(id);
                         self.advance_close_queue();
                     }
-                    if ui
-                        .add(egui::Button::new(RichText::new("保存").color(WHITE)).fill(ACCENT))
-                        .clicked()
-                    {
+                    if ui.button("取消").clicked() {
                         self.close_tab_id = None;
-                        self.close_after_save = true;
-                        self.begin_save_tab(id);
+                        self.pending_close.clear();
                     }
                 });
             });
         }
         if let Some(target) = self.rename_target.clone() {
-            egui::Modal::new(egui::Id::new("rename_collection_item")).show(ctx, |ui| {
-                ui.set_width(400.);
-                ui.heading("重命名");
+            dialog_style::modal(ctx, "rename_collection_item").show(ctx, |ui| {
+                ui.set_width(440.);
+                dialog_style::title(ui, "重命名");
                 ui.add_space(12.);
                 ui.label(format!("当前名称：{}", target.name()));
                 ui.add_space(6.);
                 ui.add_sized(
-                    [400., 34.],
+                    [ui.available_width(), 36.],
                     egui::TextEdit::singleline(&mut self.rename_name),
                 );
                 if !self.rename_error.is_empty() {
                     ui.colored_label(DANGER, &self.rename_error);
                 }
                 ui.add_space(16.);
-                ui.horizontal(|ui| {
-                    if ui.button("取消").clicked() {
-                        self.rename_target = None;
-                    }
+                dialog_style::actions(ui, |ui| {
                     if ui
                         .add_enabled(
                             !self.rename_name.trim().is_empty(),
-                            egui::Button::new("保存"),
+                            dialog_style::primary("保存", ACCENT),
                         )
                         .clicked()
                     {
                         self.rename_collection_target();
+                    }
+                    if ui.button("取消").clicked() {
+                        self.rename_target = None;
                     }
                 });
             });
@@ -339,9 +373,9 @@ impl App {
                 .iter()
                 .filter(|s| target.contains(&s.request))
                 .count();
-            egui::Modal::new(egui::Id::new("delete_collection_item")).show(ctx, |ui| {
-                ui.set_width(400.);
-                ui.heading("确认删除？");
+            dialog_style::modal(ctx, "delete_collection_item").show(ctx, |ui| {
+                ui.set_width(440.);
+                dialog_style::title(ui, "确认删除？");
                 ui.add_space(12.);
                 ui.label(format!(
                     "将删除“{}”及其中的 {count} 条请求。",
@@ -349,12 +383,12 @@ impl App {
                 ));
                 ui.label("已打开的请求将保留为草稿，可重新保存。");
                 ui.add_space(16.);
-                ui.horizontal(|ui| {
+                dialog_style::actions(ui, |ui| {
+                    if ui.add(dialog_style::primary("删除", DANGER)).clicked() {
+                        self.delete_collection_target();
+                    }
                     if ui.button("取消").clicked() {
                         self.delete_target = None;
-                    }
-                    if ui.button("删除").clicked() {
-                        self.delete_collection_target();
                     }
                 });
             });

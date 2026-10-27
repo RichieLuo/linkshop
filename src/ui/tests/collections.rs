@@ -5,11 +5,25 @@ fn collection_folder_and_request_rows_open_context_menus() {
     for (title, menu_titles) in [
         (
             "Collection A",
-            vec!["添加请求", "打开全部请求", "重命名", "删除集合"],
+            vec![
+                "添加请求",
+                "添加文件夹",
+                "集合身份验证",
+                "打开全部请求",
+                "重命名",
+                "删除集合",
+            ],
         ),
         (
             "Folder",
-            vec!["添加请求", "展开全部", "重命名", "删除文件夹"],
+            vec![
+                "添加请求",
+                "添加文件夹",
+                "文件夹身份验证",
+                "展开全部",
+                "重命名",
+                "删除文件夹",
+            ],
         ),
         (
             "First request",
@@ -23,6 +37,7 @@ fn collection_folder_and_request_rows_open_context_menus() {
                 .iter()
                 .map(|s| (s.label.clone(), s.request.clone()))
                 .collect::<Vec<_>>(),
+            &[],
         );
         let mut app = App::with_state(&ctx, saved, vec![], vec![], 0);
         for folder in folders {
@@ -134,7 +149,7 @@ fn collection_rows_toggle_and_search_preserves_collapsed_state() {
         }),
         ..Default::default()
     };
-    let folders = request_folders(&[(request.name.clone(), request)]);
+    let folders = request_folders(&[(request.name.clone(), request)], &[]);
     let folder = &folders[0];
     let active = Request::default();
     let render = |events, searching| {
@@ -197,7 +212,7 @@ fn imported_folders_and_duplicate_names_keep_identity_and_render_forms_and_varia
         .iter()
         .map(|r| (r.label.clone(), r.request.clone()))
         .collect();
-    let folders = request_folders(&entries);
+    let folders = request_folders(&entries, &bundle.folders);
     assert_eq!(folders.len(), 2);
     assert_ne!(folders[0].key, folders[1].key);
     assert_eq!(folders[0].children[0].name, "Folder");

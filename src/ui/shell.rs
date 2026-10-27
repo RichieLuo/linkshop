@@ -308,7 +308,29 @@ impl App {
                         .map(|s| (s.label.clone(), s.request.clone()))
                         .collect()
                 };
-                let folders = request_folders(&entries);
+                let stored_folders: Vec<_> = self
+                    .folders
+                    .iter()
+                    .filter(|folder| {
+                        folder
+                            .path
+                            .iter()
+                            .any(|segment| segment.to_lowercase().contains(&query))
+                    })
+                    .cloned()
+                    .collect();
+                let mut folders = request_folders(&entries, &stored_folders);
+                if query.is_empty() && !folders.iter().any(|folder| folder.key[0] == "local-saved")
+                {
+                    let local = FolderTarget::local();
+                    folders.push(RequestFolder {
+                        name: local.path[0].clone(),
+                        key: local.key,
+                        path: local.path,
+                        ..Default::default()
+                    });
+                }
+                let mut action = None;
                 if !is_history {
                     let heading = row(&mut side, 34.);
                     ellipsis_label(
@@ -322,12 +344,26 @@ impl App {
                         &side,
                         Rect::from_min_max(
                             heading.min + vec2(54., 0.),
-                            heading.max - vec2(32., 0.),
+                            heading.max - vec2(62., 0.),
                         ),
                         &format!("{} 个请求", entries.len()),
                         11.,
                         MUTED,
                     );
+                    if icon_button(
+                        &mut side,
+                        Rect::from_min_size(
+                            pos2(heading.right() - 60., heading.top() + 3.),
+                            vec2(28., 28.),
+                        ),
+                        "add_folder",
+                        Icon::Plus,
+                        "添加文件夹",
+                    )
+                    .clicked()
+                    {
+                        action = Some(SidebarAction::NewFolder(FolderTarget::local()));
+                    }
                     if icon_button(
                         &mut side,
                         Rect::from_min_size(
@@ -345,9 +381,12 @@ impl App {
                         }
                     }
                 }
-                let mut action = None;
                 egui::ScrollArea::vertical()
                     .id_salt("sidebar_list")
+                    .scroll_source(egui::scroll_area::ScrollSource {
+                        drag: is_history,
+                        ..Default::default()
+                    })
                     .auto_shrink([false, false])
                     .show(&mut side, |ui| {
                         if is_history {
@@ -377,8 +416,13 @@ impl App {
                                     &mut action,
                                 );
                             }
+                            collection_drag::scroll_while_dragging(ui);
                         }
-                        if entries.is_empty() {
+                        if entries.is_empty()
+                            && (is_history
+                                || folders.is_empty()
+                                || (self.saved.is_empty() && self.folders.is_empty()))
+                        {
                             ui.add_space(64.);
                             ui.vertical_centered(|ui| {
                                 let r = row(ui, 38.);
@@ -418,6 +462,7 @@ impl App {
                             });
                         }
                     });
+                collection_drag::drag_preview(ctx);
                 if let Some(action) = action {
                     self.sidebar_action(action);
                 }
